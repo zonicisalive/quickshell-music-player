@@ -1,0 +1,11 @@
+module presets
+
+ExpandingLyricsPlayer 1.0 ExpandingLyricsPlayer.qml
+CompactPlayer 1.0 CompactPlayer.qml
+MinimalPlayer 1.0 MinimalPlayer.qml
+ClassicPlayer 1.0 ClassicPlayer.qml
+VisualizerPlayer 1.0 VisualizerPlayer.qml
+AlbumArtPlayer 1.0 AlbumArtPlayer.qml
+LyricsPlayer 1.0 LyricsPlayer.qml
+LyricsSplitPlayer 1.0 LyricsSplitPlayer.qml
+FullPlayer 1.0 FullPlayer.qml

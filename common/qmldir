@@ -1,0 +1,13 @@
+module common
+
+singleton Appearance 1.0 Appearance.qml
+singleton ColorUtils 1.0 ColorUtils.qml
+singleton Config 1.0 Config.qml
+MaterialSymbol 1.0 MaterialSymbol.qml
+RippleButton 1.0 RippleButton.qml
+StyledSlider 1.0 StyledSlider.qml
+StyledText 1.0 StyledText.qml
+StyledImage 1.0 StyledImage.qml
+StyledRectangularShadow 1.0 StyledRectangularShadow.qml
+AdaptedMaterialScheme 1.0 AdaptedMaterialScheme.qml
+MediaArtworkResolver 1.0 MediaArtworkResolver.qml

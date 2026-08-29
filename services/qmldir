@@ -1,0 +1,5 @@
+module services
+
+singleton LyricsService 1.0 LyricsService.qml
+singleton MprisController 1.0 MprisController.qml
+singleton YtMusic 1.0 YtMusic.qml
