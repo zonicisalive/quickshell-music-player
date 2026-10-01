@@ -38,6 +38,9 @@ Item {
 
     // Track whether we're in a user-interaction grace period
     property bool _userSeeking: false
+    // Where the handle is: the dragged-to time during a seek, the real
+    // position otherwise. Bind time labels to this so they move with the drag.
+    property real previewPosition: root.position
 
     Timer {
         id: seekGraceTimer
@@ -60,13 +63,44 @@ Item {
             highlightColor: root.highlightColor
             trackColor: root.trackColor
             handleColor: root.highlightColor
-            value: root.progressValue
+            // value is driven only by the Binding below. A direct binding here
+            // would come back every time that Binding pauses for a drag, and
+            // then each position update snapped the handle back under the
+            // cursor — the flicker on the wavy line.
             scrollable: root.scrollable
+            // The time label beside the bar follows the drag, so the moving
+            // percentage popup only costs frames here.
+            showTooltip: false
 
+            // Seek once when the drag ends, not on every pixel of it. Each seek
+            // runs a playerctl process and makes the player jump and re-buffer,
+            // so seeking per move turned a drag into dozens of them — the lag.
             onMoved: {
                 root._userSeeking = true;
                 seekGraceTimer.restart();
-                root.seekRequested(value * root.length);
+                // Wheel and keyboard nudges have no release; settle those instead.
+                if (!sliderItem.pressed)
+                    settleSeek.restart();
+            }
+            onPressedChanged: {
+                if (sliderItem.pressed)
+                    return;
+                root._userSeeking = true;
+                seekGraceTimer.restart();
+                settleSeek.stop();
+                root.seekRequested(sliderItem.value * root.length);
+            }
+            Timer {
+                id: settleSeek
+                interval: 180
+                onTriggered: root.seekRequested(sliderItem.value * root.length)
+            }
+            // Lets the time label follow the handle while it is being dragged.
+            Binding {
+                target: root
+                property: "previewPosition"
+                value: sliderItem.value * root.length
+                when: sliderItem.pressed || root._userSeeking
             }
 
             // Only push external progress updates when user is NOT interacting
@@ -75,6 +109,8 @@ Item {
                 property: "value"
                 value: root.progressValue
                 when: !sliderItem.pressed && !root._userSeeking
+                // While dragging, leave the value where the user put it.
+                restoreMode: Binding.RestoreNone
             }
         }
     }

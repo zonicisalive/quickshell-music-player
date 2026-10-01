@@ -9,6 +9,7 @@ import "../common"
 import "../common"
 import "../services"
 import "../components"
+import "../components/lyricsProfiles.js" as LyricsProfiles
 
 Item {
     id: root
@@ -367,7 +368,23 @@ Item {
                                         colBackground: root.lyricsExpanded ? root.accent : "transparent"
                                         colBackgroundHover: ColorUtils.transparentize(root.ink, 0.85)
                                         colRipple: ColorUtils.transparentize(root.accent, 0.5)
-                                        onClicked: Config.setNestedValue("background.widgets.mediaControls.lyricsExpanded", !root.lyricsExpanded)
+                                        // One click opens or closes the lyrics; a quick second click
+                                        // instead moves to the next lyrics theme.
+                                        onClicked: {
+                                            if (doubleClickWindow.running) {
+                                                doubleClickWindow.stop();
+                                                const order = LyricsProfiles.order;
+                                                const current = order.indexOf(Config.options?.media?.lyricsStyle ?? "default");
+                                                Config.setNestedValue("media.lyricsStyle", order[(current + 1) % order.length]);
+                                            } else {
+                                                doubleClickWindow.start();
+                                            }
+                                        }
+                                        Timer {
+                                            id: doubleClickWindow
+                                            interval: 260
+                                            onTriggered: Config.setNestedValue("background.widgets.mediaControls.lyricsExpanded", !root.lyricsExpanded)
+                                        }
 
                                         scale: lyricsBtn.pressed ? 0.88 : (lyricsBtn.hovered ? 1.08 : 1.0)
                                         Behavior on scale {
@@ -468,6 +485,7 @@ Item {
                             spacing: 6
 
                             PlayerProgress {
+                                id: headerProgress
                                 Layout.fillWidth: true
                                 implicitHeight: 10
                                 position: playerBase.effectivePosition
@@ -480,7 +498,7 @@ Item {
                             }
 
                             StyledText {
-                                text: StringUtils.friendlyTimeForSeconds(playerBase.effectivePosition)
+                                text: StringUtils.friendlyTimeForSeconds(headerProgress.previewPosition)
                                 font.pixelSize: Appearance.font.pixelSize.smallest
                                 font.family: Appearance.font.family.numbers
                                 color: ColorUtils.applyAlpha(root.ink, 0.7)
@@ -519,10 +537,12 @@ Item {
                 PlayerLyrics {
                     id: lyricSheet
                     anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 18
-                    anchors.topMargin: 10
-                    anchors.bottomMargin: 14
+                    // The lyric-edit view uses the whole lower card; the card's
+                    // rounded mask clips it, so it needs no inset of its own.
+                    anchors.leftMargin: lyricSheet.kinetic ? 0 : 18
+                    anchors.rightMargin: lyricSheet.kinetic ? 0 : 18
+                    anchors.topMargin: lyricSheet.kinetic ? 0 : 10
+                    anchors.bottomMargin: lyricSheet.kinetic ? 0 : 14
                     showPlaceholder: true
                     textAlignment: Text.AlignHCenter
                     baseSize: Appearance.font.pixelSize.normal

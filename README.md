@@ -1,12 +1,16 @@
 # Quickshell Music Player
 
-A modern, animated MPRIS media player widget for Quickshell featuring real-time synchronized lyrics from LRCLIB, album art morphing transitions, spring-physics micro-animations, adaptive Material 3 color harmonizing, and interactive progress scrub seeking.
+A modern, animated MPRIS media player widget for Quickshell featuring real-time synchronized lyrics with nine lyric themes (including Reel, a kinetic lyric-video mode), album art morphing transitions, spring-physics micro-animations, adaptive Material 3 color harmonizing, and interactive progress scrub seeking.
 
 ![Preview](assets/preview.png)
 
 ## Features
 
-- Synchronized Scrolling Lyrics: Real-time synchronized lyrics retrieved from LRCLIB with 60 FPS interpolation, interactive click-to-seek, and smooth auto-scrolling.
+- Synchronized Scrolling Lyrics: Real-time synchronized lyrics with 60 FPS interpolation, interactive click-to-seek, and smooth auto-scrolling.
+- Word-Timed Lyrics from Three Sources: Lyrics are requested from AMLL (word-by-word timing, matched by Spotify track ID), LRCLIB and NetEase at once, and the best available answer wins. When LRCLIB holds several uploads of a song with different timings, the one most uploads agree on is used, so a single mistimed upload can't put the lyrics out of sync.
+- Lyric Themes: Theme, Cinematic, Neon, Editorial, Nocturne, Neon script, Edit, Motion and Reel, each with its own typefaces, colours, glow and stage effects. Double-click the lyrics button to move to the next theme; a single click opens and closes the lyrics.
+- Reel (Kinetic Lyric Video): Lyrics play like a lyric edit. Letters land on the beat (slam, cascade, scatter, typed-on, focus pull, card flip, squash-and-stretch and more), a highlight sweeps through each word at the speed it is sung, the stage moves like a camera with a slow push-in and a punch on every hit, and each line leaves on a cut (fly-through, blur, glitch, shatter, whip pan, fall, dissolve). Thirteen looks rotate in a shuffled order per song, including follow-cam looks where the line is set bigger than the frame and the camera pans from word to word as it is sung.
+- Player Volume: The volume control adjusts the player's own audio stream through PipeWire, not the whole system.
 - Morphing Album Art: Fluid animated transitions between compact media bar and expanded lyrics sheet without image flicker.
 - Adaptive Theming: Extracts the dominant palette from the currently playing album art to dynamically tint the card background, borders, and accent controls.
 - Tactile Micro-Animations: Spring scale curves (Easing.OutBack) on playback buttons, lyric lines, and toggle triggers.
@@ -30,6 +34,8 @@ A modern, animated MPRIS media player widget for Quickshell featuring real-time 
 - playerctl (for MPRIS media control and position tracking)
 - Python 3 (standard library only; used by lyrics fetcher)
 - Material Symbols or Nerd Font (for media icons)
+
+The lyric themes bundle their display fonts in `assets/fonts/lyrics/` (all under the SIL Open Font License; licence files sit next to the fonts).
 
 ## Installation
 
@@ -78,13 +84,16 @@ Item {
 ```
 quickshell-music-player/
 ├── assets/
-│   └── preview.png               # Widget preview screenshot
+│   ├── preview.png               # Widget preview screenshot
+│   └── fonts/lyrics/             # Display fonts used by the lyric themes
 ├── components/
 │   ├── PlayerArtwork.qml         # Album cover container with fallback
 │   ├── PlayerBase.qml            # Core player state, art resolution, and seek logic
 │   ├── PlayerControls.qml        # Play/pause, next, prev, and lyric buttons
 │   ├── PlayerInfo.qml            # Title, artist, and album typography
 │   ├── PlayerLyrics.qml          # Synced lyrics renderer and scroll engine
+│   ├── KineticLyrics.qml         # Reel / Edit / Motion kinetic lyric view
+│   ├── lyricsProfiles.js         # Lyric themes and Reel looks
 │   ├── PlayerProgress.qml        # Interactive timeline slider
 │   └── qmldir
 ├── presets/
@@ -99,13 +108,13 @@ quickshell-music-player/
 │   ├── FullPlayer.qml            # Full media dashboard
 │   └── qmldir
 ├── services/
-│   ├── LyricsService.qml         # High-precision LRCLIB synchronizer
+│   ├── LyricsService.qml         # High-precision lyrics synchronizer
 │   ├── MprisController.qml       # Active player manager and tracker
 │   ├── YtMusic.qml               # Optional player bridge
 │   └── qmldir
 ├── scripts/
 │   └── lyrics/
-│       └── lyrics.py             # LRCLIB API client
+│       └── lyrics.py             # AMLL, LRCLIB and NetEase lyrics fetcher
 ├── common/
 │   ├── Appearance.qml            # Design tokens, motion curves, and palette
 │   ├── ColorUtils.qml            # Color manipulation utilities
@@ -132,6 +141,8 @@ The player appearance and animation metrics can be adjusted in `common/Appearanc
 - `animationsEnabled`: Toggle all UI transitions and micro-animations.
 - `rounding`: Corner radius scales for card frames and album covers.
 - `colors`: Base fallback palette when album art color extraction is unavailable.
+
+The default lyric theme is set in `common/Config.qml` (`media.lyricsStyle`, for example `"reel"` or `"default"`). New themes and Reel looks are added in `components/lyricsProfiles.js`; the file documents every field.
 
 ## License
 

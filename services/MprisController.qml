@@ -6,7 +6,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
-
+import Quickshell.Services.Pipewire
 import "../common"
 import "../common"
 
@@ -82,6 +82,52 @@ Singleton {
 	
 	property MprisPlayer trackedPlayer: null;
 	property bool _manualPlayerSelection: false;
+	property var _streamMetadataById: ({})
+
+	Timer {
+		id: _streamMetadataRefresh
+		interval: 120
+		repeat: false
+		onTriggered: {
+			if (!_streamMetadataProc.running)
+				_streamMetadataProc.running = true
+		}
+	}
+
+	Process {
+		id: _streamMetadataProc
+		command: ["pw-dump"]
+		stdout: StdioCollector { id: _streamMetadataCollector }
+		onExited: (exitCode, _exitStatus) => {
+			if (exitCode !== 0) return
+			try {
+				const data = JSON.parse(_streamMetadataCollector.text ?? "[]")
+				const next = {}
+				for (const item of data) {
+					if (item?.type !== "PipeWire:Interface:Node") continue
+					const props = item?.info?.props ?? {}
+					if (props["media.class"] !== "Stream/Output/Audio") continue
+					const id = Number(item?.id ?? 0)
+					if (!Number.isFinite(id) || id <= 0) continue
+					next[id] = {
+						appName: props["application.name"] ?? "",
+						appId: props["application.id"] ?? "",
+						binary: props["application.process.binary"] ?? "",
+						nodeName: props["node.name"] ?? "",
+						mediaName: props["media.name"] ?? ""
+					}
+				}
+				root._streamMetadataById = next
+			} catch (e) {
+				console.warn("[MprisController] Failed to parse PipeWire stream metadata:", e)
+			}
+		}
+	}
+
+	Connections {
+		target: Pipewire.nodes
+		function onValuesChanged(): void { _streamMetadataRefresh.restart() }
+	}
 	
 	// Reactive counter that forces re-evaluation when any player's state changes
 	property int _playbackStateVersion: 0
@@ -98,6 +144,11 @@ Singleton {
 		// Only consider tracked if it survived display filtering
 		const trackedVisible = visiblePlayers.includes(trackedPlayer) ? trackedPlayer : null;
 		if (_manualPlayerSelection && trackedVisible) return trackedVisible;
+		// The tracked player is whichever one most recently started playing. With
+		// two players going at once (a second browser tab, a game, an ad) list
+		// order picked an arbitrary one of them, which is how the bar ended up
+		// showing a track other than the one actually being listened to.
+		if (trackedVisible?.isPlaying) return trackedVisible;
 		// Prefer the same deduped/art-capable player set used by popup surfaces
 		for (let i = 0; i < visiblePlayers.length; i++) {
 			if (visiblePlayers[i]?.isPlaying) return visiblePlayers[i];
@@ -108,6 +159,7 @@ Singleton {
 		// Raw fallback only for transient gaps while filtered players rebuild
 		const trackedRaw = players.includes(trackedPlayer) ? trackedPlayer : null;
 		if (_manualPlayerSelection && trackedRaw) return trackedRaw;
+		if (trackedRaw?.isPlaying) return trackedRaw;
 		for (let i = 0; i < players.length; i++) {
 			if (players[i]?.isPlaying) return players[i];
 		}
@@ -143,7 +195,10 @@ Singleton {
 		onTriggered: plasmaIntegrationCheckProc.running = true
 	}
 
-	Component.onCompleted: plasmaCheckDefer.start()
+	Component.onCompleted: {
+		_streamMetadataRefresh.start()
+		plasmaCheckDefer.start()
+	}
 
 	Connections {
 		target: Config
@@ -261,6 +316,81 @@ Singleton {
 		if (match?.[1]) return match[1];
 		match = value.match(/youtube\.com\/(?:shorts|live)\/([A-Za-z0-9_-]{11})/);
 		return match?.[1] ?? "";
+	}
+
+	// A player that publishes no mpris:length still reports one — the position is
+	// mirrored back as the length, so progress would sit pinned at 100% and the
+	// total time would read as the elapsed time. Firefox does this on YouTube.
+	function _publishedLength(player): real {
+		const len = player?.length ?? 0;
+		if (len <= 0) return 0;
+		return Math.abs(len - (player?.position ?? 0)) > 1.5 ? len : 0;
+	}
+
+	// ...so for a browser sitting on a YouTube video, ask yt-dlp for the real
+	// duration once per video id and cache it. Everything else keeps using the
+	// length the player publishes.
+	property var _ytLengthCache: ({})
+	property string _ytLengthPending: ""
+
+	function _ytVideoIdFor(player): string {
+		if (!player || !_isBrowserPlayer(player)) return "";
+		return _extractYoutubeVideoId(player?.metadata?.["xesam:url"] ?? "");
+	}
+
+	function trackLength(player): real {
+		const published = _publishedLength(player);
+		if (published > 0) return published;
+		const id = _ytVideoIdFor(player);
+		const cached = id ? (_ytLengthCache[id] ?? 0) : 0;
+		return cached > 0 ? cached : 0;
+	}
+
+	function hasKnownLength(player): bool {
+		return trackLength(player) > 0;
+	}
+
+	function _requestYtLength(player): void {
+		if (_publishedLength(player) > 0) return;
+		const id = _ytVideoIdFor(player);
+		if (!id || root._ytLengthCache[id] !== undefined || root._ytLengthPending === id) return;
+		root._ytLengthPending = id;
+		ytLengthProc.videoId = id;
+		ytLengthProc.command = ["/usr/bin/yt-dlp", "--no-warnings", "--skip-download",
+			"--print", "duration", "https://www.youtube.com/watch?v=" + id];
+		ytLengthProc.running = true;
+	}
+
+	Process {
+		id: ytLengthProc
+		property string videoId: ""
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const secs = parseFloat((text ?? "").trim());
+				const cache = Object.assign({}, root._ytLengthCache);
+				cache[ytLengthProc.videoId] = (isFinite(secs) && secs > 0) ? secs : 0;
+				root._ytLengthCache = cache;
+				root._ytLengthPending = "";
+			}
+		}
+		onExited: (code) => {
+			if (code !== 0) {
+				const cache = Object.assign({}, root._ytLengthCache);
+				if (cache[ytLengthProc.videoId] === undefined) cache[ytLengthProc.videoId] = 0;
+				root._ytLengthCache = cache;
+			}
+			root._ytLengthPending = "";
+		}
+	}
+
+	Connections {
+		target: root
+		function onActivePlayerChanged() { root._requestYtLength(root.activePlayer); }
+	}
+
+	Connections {
+		target: root.activePlayer
+		function onMetadataChanged() { root._requestYtLength(root.activePlayer); }
 	}
 
 	function isRealPlayer(player) {
@@ -397,8 +527,12 @@ Singleton {
 		const mimeType = player.metadata?.["xesam:mimeType"] ?? "";
 		const trackLength = player.length ?? 0;
 		
-		// Filter very short media (< 5 seconds) - likely GIFs or ads
-		if (trackLength > 0 && trackLength < 5) return false;
+		// Filter very short media (< 5 seconds) - likely GIFs or ads. Streaming
+		// sites are exempt: Firefox reports a bogus sub-second length for a real
+		// YouTube video (length == position, both under a second), which was
+		// dropping the player that was actually playing and leaving the bar
+		// showing a paused player instead.
+		if (trackLength > 0 && trackLength < 5 && !_isStreamingSite(trackUrl)) return false;
 		// Block explicit image/gif mime types even if length unknown
 		const mimeLower = mimeType.toLowerCase();
 		if (mimeLower.includes("image/gif") || mimeLower.includes("image/webp")) return false;
@@ -769,6 +903,7 @@ Singleton {
 
 		function onTrackTitleChanged() {
 			root.updateTrack();
+			_streamMetadataRefresh.restart();
 		}
 
 		function onTrackArtistChanged() {
@@ -840,23 +975,118 @@ Singleton {
 		}
 	}
 
-	property bool canChangeVolume: (root.isYtMusicActive && YtMusic.currentVideoId) ||
-		(this.activePlayer && this.activePlayer.volumeSupported && this.activePlayer.canControl);
+	function _volumeKey(value): string {
+		return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+	}
+
+	function _volumeTokens(value): var {
+		return String(value ?? "").toLowerCase().split(/[^a-z0-9]+/g)
+			.filter(token => token.length >= 3);
+	}
+
+	function _streamMatchScore(player: MprisPlayer, node): int {
+		if (!player || !node) return 0;
+		const props = node.properties ?? {};
+		const meta = root._streamMetadataById[Number(node.id ?? 0)] ?? {};
+		const mediaName = String(meta.mediaName ?? props["media.name"] ?? "");
+		const title = String(player.trackTitle ?? "");
+		const titleKey = root._volumeKey(title);
+		const mediaKey = root._volumeKey(mediaName);
+		let score = 0;
+		if (titleKey.length >= 4 && mediaKey.length >= 4) {
+			if (titleKey === mediaKey) score += 120;
+			else if (titleKey.includes(mediaKey) || mediaKey.includes(titleKey)) score += 80;
+		}
+
+		const playerValues = [
+			player.identity,
+			player.desktopEntry,
+			String(player.dbusName ?? "").replace(/^org\.mpris\.MediaPlayer2\./, "")
+		];
+		const nodeValues = [
+			meta.appName,
+			meta.appId,
+			meta.binary,
+			meta.nodeName,
+			node.name,
+			node.description,
+			node.nickname,
+			props["application.name"],
+			props["application.id"],
+			props["application.process.binary"],
+			props["node.name"]
+		];
+		for (const pv of playerValues) {
+			const pk = root._volumeKey(pv);
+			if (!pk) continue;
+			const pt = root._volumeTokens(pv);
+			let candidateScore = 0;
+			for (const nv of nodeValues) {
+				const nk = root._volumeKey(nv);
+				if (!nk) continue;
+				if (pk === nk) candidateScore = Math.max(candidateScore, 60);
+				else if (pk.length >= 4 && nk.length >= 4 && (pk.includes(nk) || nk.includes(pk)))
+					candidateScore = Math.max(candidateScore, 45);
+				const nt = root._volumeTokens(nv);
+				let overlap = 0;
+				for (const token of pt) if (nt.includes(token)) overlap++;
+				if (overlap > 0) candidateScore = Math.max(candidateScore, overlap * 12);
+			}
+			score += candidateScore;
+		}
+		return score;
+	}
+
+	function streamNodeForPlayer(player: MprisPlayer): var {
+		if (!player) return null;
+		let best = null;
+		let bestScore = 0;
+		// Output streams straight from PipeWire (the shell routes this through its Audio service).
+		const streams = Pipewire.nodes.values.filter(node => node.isSink && node.audio && node.isStream);
+		for (const node of streams) {
+			const score = root._streamMatchScore(player, node);
+			if (score > bestScore) {
+				bestScore = score;
+				best = node;
+			}
+		}
+		return bestScore >= 12 ? best : null;
+	}
+
+	readonly property var activePlayerStreamNode: root.streamNodeForPlayer(root.activePlayer)
+	PwObjectTracker { objects: root.activePlayerStreamNode ? [root.activePlayerStreamNode] : [] }
+	readonly property real volume: {
+		if (root.isYtMusicActive && YtMusic.currentVideoId)
+			return YtMusic.getVolume();
+		const nodeVolume = root.activePlayerStreamNode?.audio?.volume;
+		if (nodeVolume !== undefined && nodeVolume !== null)
+			return Math.max(0, Math.min(1, nodeVolume));
+		return Math.max(0, Math.min(1, root.activePlayer?.volume ?? 0));
+	}
+	readonly property bool canChangeVolume: (root.isYtMusicActive && YtMusic.currentVideoId)
+		|| !!root.activePlayerStreamNode?.audio
+		|| !!(root.activePlayer && root.activePlayer.volumeSupported && root.activePlayer.canControl);
 
 	function getVolume(): real {
-		if (root.isYtMusicActive && YtMusic.currentVideoId) {
-			return YtMusic.getVolume();
-		}
-		return this.activePlayer?.volume ?? 0;
+		return root.volume;
 	}
 
 	function setVolume(vol: real): void {
 		const clamped = Math.max(0, Math.min(1, vol));
 		if (root.isYtMusicActive && YtMusic.currentVideoId) {
 			YtMusic.setVolume(clamped);
-		} else if (this.activePlayer && this.activePlayer.volumeSupported && this.activePlayer.canControl) {
-			this.activePlayer.volume = clamped;
+			return;
 		}
+		const node = root.activePlayerStreamNode;
+		if (node?.audio) {
+			node.audio.volume = clamped;
+			const nodeId = Number(node.id ?? 0);
+			if (Number.isFinite(nodeId) && nodeId > 0)
+				Quickshell.execDetached(["wpctl", "set-volume", String(nodeId), String(clamped)]);
+			return;
+		}
+		if (root.activePlayer && root.activePlayer.volumeSupported && root.activePlayer.canControl)
+			root.activePlayer.volume = clamped;
 	}
 
 	property bool loopSupported: this.activePlayer && this.activePlayer.loopSupported && this.activePlayer.canControl;

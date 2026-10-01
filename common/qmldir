@@ -11,3 +11,23 @@ StyledImage 1.0 StyledImage.qml
 StyledRectangularShadow 1.0 StyledRectangularShadow.qml
 AdaptedMaterialScheme 1.0 AdaptedMaterialScheme.qml
 MediaArtworkResolver 1.0 MediaArtworkResolver.qml
+MaterialShape 1.0 MaterialShape.qml
+MaterialShapeWrappedMaterialSymbol 1.0 MaterialShapeWrappedMaterialSymbol.qml
+CavaVisualizer 1.0 CavaVisualizer.qml
+MaterialLoadingIndicator 1.0 MaterialLoadingIndicator.qml
+MediaCrossSlideImage 1.0 MediaCrossSlideImage.qml
+StyledToolTip 1.0 StyledToolTip.qml
+WaveVisualizer 1.0 WaveVisualizer.qml
+ZzzGraphicPlate 1.0 ZzzGraphicPlate.qml
+ZzzTechFrame 1.0 ZzzTechFrame.qml
+ZzzDiagonalPattern 1.0 ZzzDiagonalPattern.qml
+ZzzSurfaceAccent 1.0 ZzzSurfaceAccent.qml
+PopupToolTip 1.0 PopupToolTip.qml
+singleton StringUtils 1.0 StringUtils.qml
+singleton Translation 1.0 Translation.qml
+CookieFace 1.0 CookieFace.qml
+CookiePlate 1.0 CookiePlate.qml
+StyledProgressBar 1.0 StyledProgressBar.qml
+WavyLine 1.0 WavyLine.qml
+StyledToolTipContent 1.0 StyledToolTipContent.qml
+AngelPartialBorder 1.0 AngelPartialBorder.qml

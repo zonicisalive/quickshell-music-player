@@ -6,3 +6,4 @@ PlayerProgress 1.0 PlayerProgress.qml
 PlayerInfo 1.0 PlayerInfo.qml
 PlayerControls 1.0 PlayerControls.qml
 PlayerLyrics 1.0 PlayerLyrics.qml
+KineticLyrics 1.0 KineticLyrics.qml

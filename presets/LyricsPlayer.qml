@@ -165,10 +165,11 @@ Item {
                 }
             }
             anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
-            anchors.topMargin: 24
-            anchors.bottomMargin: 24
+            // The lyric-edit view uses the whole card; the card clips it.
+            anchors.leftMargin: lyricSheet.kinetic ? 0 : 20
+            anchors.rightMargin: lyricSheet.kinetic ? 0 : 20
+            anchors.topMargin: lyricSheet.kinetic ? 0 : 24
+            anchors.bottomMargin: lyricSheet.kinetic ? 0 : 24
             textAlignment: Text.AlignHCenter
             lineSpacing: 12
             baseSize: Appearance.font.pixelSize.large

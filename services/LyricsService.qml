@@ -105,6 +105,10 @@ Singleton {
         const artist = player?.trackArtist ?? "";
         const album = player?.trackAlbum ?? "";
         const duration = player?.length ?? 0;
+        // AMLL indexes word-level lyrics by Spotify track id, and MPRIS already
+        // carries it as /com/spotify/track/<id> — no searching required.
+        const trackId = String(player?.metadata?.["mpris:trackid"] ?? "");
+        const spotifyId = trackId.includes("/spotify/track/") ? trackId.split("/").pop() : "";
         const key = JSON.stringify([
             player?.dbusName ?? "",
             player?.uniqueId ?? 0,
@@ -115,6 +119,7 @@ Singleton {
         ]);
         return {
             key: key,
+            spotifyId: spotifyId,
             title: title,
             artist: artist,
             album: album,
@@ -170,6 +175,7 @@ Singleton {
         root._pendingRequest = {
             requestId: requestId,
             trackKey: snapshot.key,
+            spotifyId: snapshot.spotifyId,
             title: snapshot.title,
             artist: snapshot.artist,
             album: snapshot.album,
@@ -203,7 +209,8 @@ Singleton {
             request.artist,
             request.album,
             String(Math.floor(request.duration)),
-            request.requestId
+            request.requestId,
+            request.spotifyId ?? ""
         ];
         lyricsProc.running = true;
     }
@@ -214,7 +221,47 @@ Singleton {
                 return;
             root.status = nextStatus;
             root._clearPublished();
+            root._scheduleRetry(nextStatus);
         });
+    }
+
+    // Self-healing. "error" means a provider could not be reached (a stalled
+    // connection, a rate limit), not that the song has no lyrics — and an error
+    // counted as settled, so one bad moment used to stick until the track
+    // changed. Retry it a few times with growing gaps. "not_found" is a real
+    // answer from every provider and is left alone.
+    readonly property var _retryDelays: [4000, 15000, 45000]
+    property int _retryCount: 0
+    property string _retryTrackKey: ""
+
+    function _scheduleRetry(status: string): void {
+        if (status !== "error") {
+            root._retryCount = 0;
+            return;
+        }
+        const key = root._latestTrackKey;
+        if (key !== root._retryTrackKey) {
+            root._retryTrackKey = key;
+            root._retryCount = 0;
+        }
+        if (root._retryCount >= root._retryDelays.length)
+            return;
+        retryTimer.interval = root._retryDelays[root._retryCount];
+        root._retryCount++;
+        retryTimer.restart();
+    }
+
+    Timer {
+        id: retryTimer
+        repeat: false
+        onTriggered: {
+            // Only retry the track that failed; a new track brings its own fetch.
+            if (!root.active || root.status !== "error"
+                    || root._snapshot().key !== root._retryTrackKey)
+                return;
+            root._latestTrackKey = "";
+            root._queueCurrentTrack();
+        }
     }
 
     function _publishSuccess(requestId: string, lines: var): void {
@@ -222,6 +269,7 @@ Singleton {
             if (!root.active || requestId !== root._latestRequestId)
                 return;
 
+            root._retryCount = 0;
             root.lyricsLines = lines;
             root.activeIndex = -1;
             root.slots = root.buildSlots(-1);
@@ -347,7 +395,10 @@ Singleton {
                     .filter(line => typeof line.t === "number")
                     .map(line => ({
                         time: line.t,
-                        text: line.text ?? ""
+                        text: line.text ?? "",
+                        // Present only for word-level providers; the renderer
+                        // falls back to its own estimate when absent.
+                        words: Array.isArray(line.words) ? line.words : null
                     }));
 
                 if (lines.length === 0) {

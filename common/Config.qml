@@ -2,13 +2,18 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
 
 Singleton {
     id: root
 
     property var options: ({
         media: {
-            filterDuplicatePlayers: true
+            filterDuplicatePlayers: true,
+            // Look of the lyric sheet; see components/lyricsProfiles.js. The lyrics
+            // button cycles through them on a double-click.
+            lyricsStyle: "reel",
+            lyricsCustomStyle: ({})
         },
         background: {
             widgets: {
@@ -22,8 +27,12 @@ Singleton {
     })
 
     property bool ready: true
+    // Bumped on every change, so bindings that read settings re-evaluate.
+    property int revision: 0
+    signal configChanged()
 
     function getNestedValue(path: string, defaultValue: var): var {
+        void root.revision;
         const parts = path.split(".");
         let curr = root.options;
         for (const p of parts) {
@@ -47,5 +56,9 @@ Singleton {
             curr = curr[p];
         }
         curr[parts[parts.length - 1]] = value;
+        // The object was changed in place; tell the bindings that read it.
+        root.revision++;
+        root.optionsChanged();
+        root.configChanged();
     }
 }

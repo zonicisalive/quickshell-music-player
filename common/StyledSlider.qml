@@ -1,6 +1,4 @@
 pragma ComponentBehavior: Bound
-import "../common"
-import "../common"
 import "../services"
 import QtQuick
 import QtQuick.Controls
@@ -66,6 +64,10 @@ Slider {
     property real handleMargins: 4
     property real trackDotSize: 3
     property string tooltipContent: `${Math.round(value * 100)}%`
+    // The tooltip is its own popup surface; following the handle means asking
+    // the compositor to move it every frame of a drag. Sliders that already
+    // show their value nearby can switch it off.
+    property bool showTooltip: true
     property bool scrollable: false
     property bool _userInteracting: false
     property bool wavy: configuration === StyledSlider.Configuration.Wavy
@@ -303,6 +305,7 @@ Slider {
         }
 
         StyledToolTip {
+            visible: root.showTooltip
             extraVisibleCondition: root.pressed
             text: root.tooltipContent
             font {
