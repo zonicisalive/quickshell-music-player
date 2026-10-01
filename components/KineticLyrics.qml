@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Effects
 import Qt5Compat.GraphicalEffects as GE
 import "../common"
-import "../common"
 import "../services"
 import "lyricsProfiles.js" as LyricsProfiles
 
@@ -19,14 +18,27 @@ Item {
 
     // PlayerLyrics, for its bundled fonts and colour helpers.
     required property var host
-    readonly property var looks: host.style.looks ?? []
+    // Reel's looks can be switched off one by one in the settings; if every
+    // look is off, all of them play rather than none.
+    readonly property var looks: {
+        const all = kin.host.style.looks ?? [];
+        const off = Config.options?.media?.reelDisabledLooks ?? [];
+        const on = all.filter(look => !look.id || !off.includes(look.id));
+        return on.length > 0 ? on : all;
+    }
     readonly property int index: LyricsService.activeIndex
     readonly property real pos: LyricsService.currentPosition
 
     // Seconds between line starts that count as a section break.
     readonly property real sectionGap: host.style.sectionGap ?? 6.0
     // Within one long section, move to the next look every this many lines.
-    readonly property int linesPerLook: host.style.linesPerLook ?? 4
+    // Reel takes this from the settings; 0 there means only at section breaks.
+    readonly property int linesPerLook: {
+        if (!kin.host.style.camera)
+            return kin.host.style.linesPerLook ?? 4;
+        const lines = Config.options?.media?.reelLookChange ?? 4;
+        return lines > 0 ? lines : 100000;
+    }
 
     function normalize(text: string): string {
         return (text ?? "").toLowerCase().replace(/[.,!?;:'"“”‘’()\[\]\-]+/g, " ").replace(/\s+/g, " ").trim();
@@ -167,7 +179,14 @@ Item {
     // ── Camera ───────────────────────────────────────────────────────────
     // Profiles with a camera treat the stage as a filmed shot: a slow push-in
     // across each line, and a punch-zoom and jolt when a word lands.
-    readonly property var cam: kin.host.style.camera ?? null
+    // Camera strength from the settings scales the profile's push, punch and shake.
+    readonly property var cam: {
+        const base = kin.host.style.camera;
+        if (!base)
+            return null;
+        const strength = ({ off: 0, subtle: 0.5, normal: 1, strong: 1.7 })[Config.options?.media?.reelCamera ?? "normal"] ?? 1;
+        return { push: base.push * strength, punch: base.punch * strength, shake: base.shake * strength };
+    }
     readonly property bool filmed: !!kin.cam && Appearance.animationsEnabled
 
     // Hit envelope, 0..1: snaps up when a word lands and decays.
@@ -193,6 +212,65 @@ Item {
         NumberAnimation { target: kin; property: "kick"; to: 0; duration: 460; easing.type: Easing.OutCubic }
     }
 
+    // ── Beats ────────────────────────────────────────────────────────────
+    // Reel listens to the music as well as the lyric timing: the shared Cava
+    // spectrum gives the bass level, and a kick is a sudden jump above its
+    // recent average. Each one punches the camera, bounces the word being
+    // sung and pulses the glow. "Beats" in the settings scales or stops it.
+    readonly property real beatStrength: !kin.cam ? 0
+        : (({ off: 0, light: 0.55, strong: 1 })[Config.options?.media?.reelBeats ?? "light"] ?? 0.55)
+    readonly property bool beatsOn: Appearance.animationsEnabled && kin.beatStrength > 0
+    // 0..1, snaps up on a beat and decays.
+    property real beatPulse: 0
+    property real _bassAverage: 0
+    property double _lastBeat: 0
+
+    CavaProcess {
+        id: beatSource
+        active: kin.beatsOn
+    }
+
+    Connections {
+        target: beatSource
+        enabled: kin.beatsOn
+        function onPointsChanged(): void {
+            kin.readBeat(beatSource.points);
+        }
+    }
+
+    function readBeat(points: var): void {
+        const count = points.length;
+        if (count < 4)
+            return;
+        // Stereo output mirrors the left channel, so the lowest bands meet in
+        // the middle; in mono they lead the list.
+        const stereo = Config.options?.appearance?.cava?.stereo ?? true;
+        const from = stereo ? Math.floor(count / 2) - 2 : 0;
+        let sum = 0;
+        for (let i = from; i < from + 4; i++)
+            sum += points[Math.max(0, Math.min(count - 1, i))];
+        const bass = sum / 4 / 1000;
+        const average = kin._bassAverage;
+        kin._bassAverage = average * 0.94 + bass * 0.06;
+        const now = Date.now();
+        // A real kick, well over the running level, and no faster than ~300 bpm.
+        if (bass > 0.16 && bass > average * 1.3 + 0.04 && now - kin._lastBeat > 200) {
+            kin._lastBeat = now;
+            const hit = Math.min(1, (bass - average) * 2.5) * kin.beatStrength;
+            kin.punch(hit * 0.8);
+            beatAnimation.stop();
+            beatAnimation.peak = hit;
+            beatAnimation.start();
+        }
+    }
+
+    SequentialAnimation {
+        id: beatAnimation
+        property real peak: 1
+        NumberAnimation { target: kin; property: "beatPulse"; to: beatAnimation.peak; duration: 40; easing.type: Easing.OutQuad }
+        NumberAnimation { target: kin; property: "beatPulse"; to: 0; duration: 280; easing.type: Easing.OutCubic }
+    }
+
     // How far through the current line we are, for the push-in.
     readonly property real lineProgress: {
         if (!kin.filmed || kin.resting)
@@ -213,8 +291,22 @@ Item {
         case "OutExpo": return Easing.OutExpo;
         case "Linear": return Easing.Linear;
         case "OutBounce": return Easing.OutBounce;
+        case "OutElastic": return Easing.OutElastic;
         default: return Easing.OutCubic;
         }
+    }
+
+    // Everything "Mixed" transitions draw from.
+    readonly property var exitPool: ["through", "blur", "glitch", "shatter", "whip", "fall", "split",
+        "dissolve", "flip", "explode", "evaporate", "squash", "spinout", "rewind", "wipe", "iris",
+        "melt", "implode", "drift", "scrambleOut"]
+    readonly property var cutPool: ["none", "wipe", "iris", "push", "zoomIn", "tilt", "drop"]
+
+    // Characters a scrambling letter flips through before it settles.
+    readonly property string scrambleGlyphs: "ABCDEFGHJKLMNPQRSTUVWXYZ#%&*+=?/$@<>"
+    function scrambleGlyph(seed: real, step: int): string {
+        const v = Math.sin(seed * 997.3 + step * 17.31) * 43758.5453;
+        return kin.scrambleGlyphs[Math.floor((v - Math.floor(v)) * kin.scrambleGlyphs.length)];
     }
 
     function letterMotion(name: string): var {
@@ -284,7 +376,9 @@ Item {
         MaterialSymbol {
             id: noteIcon
             anchors.centerIn: parent
-            anchors.verticalCenterOffset: Math.round(restNote.sway * kin.height * 0.02)
+            anchors.verticalCenterOffset: Math.round(restNote.sway * kin.height * 0.02 - kin.beatPulse * kin.height * 0.04)
+            // Between verses the note keeps time with the music.
+            scale: 1 + kin.beatPulse * 0.25
             rotation: restNote.sway * 6
             text: "music_note"
             fill: 1
@@ -326,8 +420,10 @@ Item {
             // A follow-cam line is bigger than the frame on purpose.
             if (f.follow)
                 return 0.06;
-            const w = (f.blockWidth + (f.stagger ? kin.width * 0.14 : 0)) * 1.06;
-            const h = f.blockHeight * 1.06;
+            // The glow spreads past the letters, so it needs room too.
+            const glow = 2 * (f.look.glow?.radius ?? 0);
+            const w = (f.blockWidth + glow + (f.stagger ? kin.width * 0.14 : 0)) * 1.06;
+            const h = (f.blockHeight + glow) * 1.06;
             const room = Math.min((kin.width - 2 * camera.shake - 8) / w, (kin.height - 2 * camera.shake - 8) / h);
             return Math.max(0, room - 1);
         }
@@ -397,7 +493,30 @@ Item {
             readonly property color ink: kin.host.styleColor(slot.look.color ?? "#ffffff")
             readonly property var glow: slot.look.glow ?? null
             readonly property string enter: slot.look.enter ?? "pop"
-            readonly property string exit: slot.look.exit ?? "fade"
+            // "Mixed" transitions (Reel setting) draw each line's exit and cut-in
+            // from the whole pool, keyed on the line so a replay matches.
+            readonly property bool mixed: !!kin.cam
+                && (Config.options?.media?.reelTransitions ?? "look") === "mixed"
+            function pick(pool: var, salt: int): string {
+                const v = Math.sin((slot.lineIndex + 1) * 91.17 + salt * 13.7) * 43758.5453;
+                return pool[Math.floor((v - Math.floor(v)) * pool.length)];
+            }
+            readonly property string exit: slot.mixed && slot.letters
+                ? slot.pick(kin.exitPool, 1) : (slot.look.exit ?? "fade")
+            // How the whole line arrives, on top of its letters landing:
+            //   wipe  revealed left to right      iris  opens from the middle
+            //   push  slides in from the right    zoomIn  pulls back into focus
+            //   tilt  tips up from lying flat     drop  falls into place
+            readonly property string cut: slot.mixed && slot.letters
+                ? slot.pick(kin.cutPool, 2) : (slot.look.cut ?? "none")
+            property real enterT: slot.cut === "none" ? 1 : 0
+            NumberAnimation on enterT {
+                running: slot.cut !== "none" && Appearance.animationsEnabled
+                from: 0; to: 1
+                duration: slot.cut === "drop" ? 520 : slot.cut === "iris" || slot.cut === "wipe" ? 460 : 400
+                easing.type: slot.cut === "drop" ? Easing.OutBack : Easing.OutCubic
+            }
+            Component.onCompleted: if (!Appearance.animationsEnabled) slot.enterT = 1
             // Reel looks build words out of letters instead of whole words.
             readonly property bool letters: slot.look.letters ?? false
             readonly property bool stagger: slot.look.layout === "stagger"
@@ -467,15 +586,44 @@ Item {
                     const r = metrics.tightBoundingRect(text);
                     return Math.max(metrics.advanceWidth(text), r.x + r.width) - Math.min(0, r.x);
                 }
+                // Letter-built words are drawn one glyph at a time, so a script
+                // face can't join them up and they come out wider than the word
+                // set whole (the blue neon looks overflowed this way). Add up the
+                // separate letters, plus how far the end letters' swashes reach.
+                function lettersWidth(metrics, text) {
+                    const chars = Array.from(text);
+                    if (chars.length === 0)
+                        return 0;
+                    let width = 0;
+                    for (const c of chars)
+                        width += metrics.advanceWidth(c);
+                    const first = metrics.tightBoundingRect(chars[0]);
+                    const lastChar = chars[chars.length - 1];
+                    const last = metrics.tightBoundingRect(lastChar);
+                    return width + Math.max(0, -first.x)
+                        + Math.max(0, last.x + last.width - metrics.advanceWidth(lastChar));
+                }
+                function wordWidth(metrics, text) {
+                    return slot.letters ? Math.max(inkWidth(metrics, text), lettersWidth(metrics, text))
+                                        : inkWidth(metrics, text);
+                }
+                // Script capitals and descenders reach past the line height too.
+                function wordHeight(metrics, text) {
+                    return Math.max(metrics.height, metrics.tightBoundingRect(text).height);
+                }
                 const widths = list.map(word => word.hero
-                    ? inkWidth(heroMetrics, slot.heroUpper ? word.text.toUpperCase() : word.text) * 1.1
-                    : inkWidth(fullMetrics, slot.upper ? word.text.toUpperCase() : word.text) * 1.1);
-                const heights = list.map(word => (word.hero ? heroMetrics.height : fullMetrics.height) * 1.08);
+                    ? wordWidth(heroMetrics, slot.heroUpper ? word.text.toUpperCase() : word.text) * 1.1
+                    : wordWidth(fullMetrics, slot.upper ? word.text.toUpperCase() : word.text) * 1.1);
+                const heights = list.map(word => word.hero
+                    ? wordHeight(heroMetrics, slot.heroUpper ? word.text.toUpperCase() : word.text) * 1.08
+                    : wordHeight(fullMetrics, slot.upper ? word.text.toUpperCase() : word.text) * 1.08);
+                // The glow spreads past the letters on every side.
+                const glowPad = 2 * Math.max(slot.look.glow?.radius ?? 0, slot.accent?.glow?.radius ?? 0);
                 // Staggered rows step sideways and get less width; a follow-cam
                 // line is set bigger than the frame, for the camera to pan across.
                 // The camera keeps its zoom within what is left (camera.headroom).
-                const maxW = kin.width * (slot.follow ? 1.5 : slot.stagger ? 0.76 : 0.9);
-                const maxH = kin.height * (slot.follow ? 1.3 : 0.84);
+                const maxW = kin.width * (slot.follow ? 1.5 : slot.stagger ? 0.76 : 0.9) - glowPad;
+                const maxH = kin.height * (slot.follow ? 1.3 : 0.84) - glowPad;
                 let size = base;
                 let rows = [];
                 let inkRow = 0;
@@ -527,7 +675,7 @@ Item {
                     inkHeight = height;
                     // A follow-cam line may run past the frame, but every word on
                     // its own must fit, or the camera can't show it whole.
-                    const widestAllowed = slot.follow ? kin.width * 0.8 : maxW;
+                    const widestAllowed = slot.follow ? kin.width * 0.8 - glowPad : maxW;
                     if (height <= maxH && widest <= widestAllowed)
                         break;
                     size *= 0.92;
@@ -564,6 +712,17 @@ Item {
                 : slot.exit === "split" ? 400
                 : slot.exit === "dissolve" ? 480
                 : slot.exit === "flip" ? 380
+                : slot.exit === "explode" ? 520
+                : slot.exit === "evaporate" ? 640
+                : slot.exit === "squash" ? 300
+                : slot.exit === "spinout" ? 520
+                : slot.exit === "rewind" ? 260
+                : slot.exit === "wipe" ? 380
+                : slot.exit === "iris" ? 420
+                : slot.exit === "melt" ? 700
+                : slot.exit === "implode" ? 420
+                : slot.exit === "drift" ? 720
+                : slot.exit === "scrambleOut" ? 560
                 : slot.exit === "whip" ? 240
                 : slot.exit === "blur" ? 340
                 : slot.exit === "flicker" ? 380 : 300
@@ -575,42 +734,50 @@ Item {
                     target: slot; property: "opacity"; to: 0
                     duration: slot.exitDuration
                     easing.type: slot.exit === "flicker" ? Easing.OutBounce
-                        : ["shatter", "fall", "split", "dissolve"].includes(slot.exit) ? Easing.InQuart
+                        : ["shatter", "fall", "split", "dissolve", "explode", "evaporate", "spinout",
+                           "melt", "scrambleOut"].includes(slot.exit) ? Easing.InQuart
+                        // Wipes and irises are carried by the mask; fade only at the very end.
+                        : slot.exit === "wipe" || slot.exit === "iris" ? Easing.InExpo
                         : Easing.InCubic
                 }
                 NumberAnimation {
                     target: slot; property: "scale"
                     to: slot.exit === "zoom" ? 1.4 : slot.exit === "spin" ? 0.78
-                        : slot.exit === "through" ? 3.2 : slot.exit === "blur" ? 0.9 : 1.0
+                        : slot.exit === "through" ? 3.2 : slot.exit === "blur" ? 0.9
+                        : slot.exit === "implode" ? 0.04 : 1.0
                     duration: slot.exitDuration
-                    easing.type: slot.exit === "through" ? Easing.InQuad : Easing.InCubic
+                    // "implode" swells a touch before it collapses.
+                    easing.type: slot.exit === "through" ? Easing.InQuad
+                        : slot.exit === "implode" ? Easing.InBack : Easing.InCubic
                 }
                 NumberAnimation {
                     target: slot; property: "rotation"
-                    to: slot.exit === "spin" ? 9 : 0
+                    to: slot.exit === "spin" ? 9 : slot.exit === "implode" ? -35 : 0
                     duration: slot.exitDuration; easing.type: Easing.InCubic
                 }
                 NumberAnimation {
                     target: slotShift; property: "y"
-                    to: slot.exit === "lift" ? -kin.height * 0.18 : 0
-                    duration: slot.exitDuration; easing.type: Easing.InCubic
+                    to: slot.exit === "lift" ? -kin.height * 0.18 : slot.exit === "drift" ? -kin.height * 0.3 : 0
+                    duration: slot.exitDuration
+                    easing.type: slot.exit === "drift" ? Easing.OutCubic : Easing.InCubic
                 }
                 NumberAnimation {
                     target: slotShift; property: "x"
-                    to: slot.exit === "whip" ? -kin.width * 0.75 : 0
+                    to: slot.exit === "whip" ? -kin.width * 0.75 : slot.exit === "rewind" ? kin.width * 0.75 : 0
                     duration: slot.exitDuration; easing.type: Easing.InCubic
                 }
                 NumberAnimation {
                     target: slot; property: "blurAmount"
-                    to: slot.exit === "whip" || slot.exit === "blur" || slot.exit === "through" ? 1 : 0
+                    to: ["whip", "rewind", "blur", "through"].includes(slot.exit) ? 1
+                        : slot.exit === "drift" ? 0.5 : 0
                     duration: slot.exitDuration; easing.type: Easing.InQuad
                 }
                 NumberAnimation {
                     target: slot; property: "exitT"; to: 1
                     duration: slot.exitDuration
                     // Falling letters accelerate; everything else bursts out and slows.
-                    easing.type: slot.exit === "fall" ? Easing.InQuad
-                        : slot.exit === "flip" ? Easing.InCubic : Easing.OutCubic
+                    easing.type: slot.exit === "fall" || slot.exit === "melt" ? Easing.InQuad
+                        : ["flip", "squash", "wipe", "iris"].includes(slot.exit) ? Easing.InCubic : Easing.OutCubic
                 }
             }
 
@@ -634,14 +801,92 @@ Item {
             }
             transform: [
                 Translate { id: slotShift },
+                // Cut-ins: "push" from the right, "drop" from above.
+                Translate {
+                    x: slot.cut === "push" ? (1 - slot.enterT) * kin.width * 0.7 : 0
+                    y: slot.cut === "drop" ? -(1 - slot.enterT) * kin.height * 0.55 : 0
+                },
+                // "zoomIn": starts close and pulls back into place.
+                Scale {
+                    origin.x: slot.width / 2
+                    origin.y: slot.height / 2
+                    xScale: slot.cut === "zoomIn" ? 1 + (1 - slot.enterT) * 0.7 : 1
+                    yScale: xScale
+                },
+                // "tilt": tips up from lying flat.
+                Rotation {
+                    origin.x: slot.width / 2
+                    origin.y: slot.height
+                    axis { x: 1; y: 0; z: 0 }
+                    angle: slot.cut === "tilt" ? -(1 - slot.enterT) * 75 : 0
+                },
                 // "flip": the line tips back away from the camera like a card.
                 Rotation {
                     origin.x: slot.width / 2
                     origin.y: slot.height / 2
                     axis { x: 1; y: 0; z: 0 }
                     angle: slot.exit === "flip" ? slot.exitT * 88 : 0
+                },
+                // "squash": the line is crushed flat as it leaves.
+                Scale {
+                    origin.x: slot.width / 2
+                    origin.y: slot.height / 2
+                    xScale: slot.exit === "squash" ? 1 + slot.exitT * 0.35 : 1
+                    yScale: slot.exit === "squash" ? 1 - slot.exitT * 0.95 : 1
                 }
             ]
+
+            // Wipes and irises, in or out, are a mask over the whole line.
+            readonly property string maskShape: (slot.leaving && (slot.exit === "wipe" || slot.exit === "iris")) ? slot.exit
+                : (!slot.leaving && slot.enterT < 1 && (slot.cut === "wipe" || slot.cut === "iris")) ? slot.cut : ""
+            readonly property real maskOpen: slot.leaving ? 1 - slot.exitT : slot.enterT
+            readonly property real effectBlur: Math.max(slot.blurAmount, slot.cut === "zoomIn" ? (1 - slot.enterT) * 0.8 : 0)
+
+            Item {
+                id: revealMask
+                anchors.fill: parent
+                visible: false
+                layer.enabled: true
+                // Wipe: a soft-edged band, growing from the left on the way in
+                // and closing towards the right on the way out.
+                Rectangle {
+                    visible: slot.maskShape === "wipe"
+                    height: parent.height
+                    width: parent.width * 1.3 * slot.maskOpen
+                    x: slot.leaving ? parent.width * 1.3 * (1 - slot.maskOpen) - parent.width * 0.3 : -parent.width * 0.3
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: slot.leaving ? "transparent" : "white" }
+                        GradientStop { position: 0.2; color: "white" }
+                        GradientStop { position: 0.8; color: "white" }
+                        GradientStop { position: 1.0; color: slot.leaving ? "white" : "transparent" }
+                    }
+                }
+                // Iris: a circle opening from, or closing on, the middle of the line.
+                Rectangle {
+                    visible: slot.maskShape === "iris"
+                    readonly property real reach: Math.hypot(parent.width, parent.height)
+                    width: reach * slot.maskOpen
+                    height: width
+                    radius: width / 2
+                    x: block.x + block.width / 2 - width / 2
+                    y: block.y + block.height / 2 - height / 2
+                    color: "white"
+                }
+            }
+
+            // Blur for the cuts that smear the line (whip, rewind, fly-through,
+            // blur, drift, zoom-in) and the wipe/iris mask, only while in use.
+            layer.enabled: (slot.effectBlur > 0.01 || slot.maskShape.length > 0) && Appearance.effectsEnabled
+            layer.effect: MultiEffect {
+                blurEnabled: slot.effectBlur > 0.01
+                blur: slot.effectBlur
+                blurMax: 48
+                maskEnabled: slot.maskShape.length > 0
+                maskSource: revealMask
+                maskThresholdMin: 0.0
+                maskSpreadAtMin: 1.0
+            }
 
             // A soft halo of the line's own colour behind it. Sized to the text
             // rather than the panel and faded to nothing at its rim, so it lifts
@@ -659,7 +904,7 @@ Item {
                 y: Math.max(0, Math.min(kin.height - height, cy - height / 2))
                 horizontalRadius: width / 2
                 verticalRadius: height / 2
-                opacity: 0.18 + kin.kick * 0.06
+                opacity: 0.18 + kin.kick * 0.06 + kin.beatPulse * 0.12
                 gradient: Gradient {
                     GradientStop {
                         position: 0.0
@@ -741,16 +986,25 @@ Item {
                                 scale: word.shown ? (word.singing && word.held ? 1.1 : 1.0)
                                     : slot.letters ? 1.0 : word.startScale
                                 rotation: word.shown || slot.letters ? word.restRotation : word.startRotation
-                                transform: Translate {
-                                    y: word.shown || slot.letters ? 0 : word.startY
-                                    Behavior on y {
-                                        enabled: Appearance.animationsEnabled
-                                        NumberAnimation {
-                                            duration: word.enter === "drop" ? 520 : 360
-                                            easing.type: word.enter === "drop" ? Easing.OutBounce : Easing.OutCubic
+                                transform: [
+                                    Translate {
+                                        y: word.shown || slot.letters ? 0 : word.startY
+                                        Behavior on y {
+                                            enabled: Appearance.animationsEnabled
+                                            NumberAnimation {
+                                                duration: word.enter === "drop" ? 520 : 360
+                                                easing.type: word.enter === "drop" ? Easing.OutBounce : Easing.OutCubic
+                                            }
                                         }
+                                    },
+                                    // The word being sung bounces on the beat.
+                                    Scale {
+                                        origin.x: word.width / 2
+                                        origin.y: word.height
+                                        xScale: word.singing ? 1 + kin.beatPulse * 0.09 : 1
+                                        yScale: word.singing ? 1 + kin.beatPulse * 0.12 : 1
                                     }
-                                }
+                                ]
 
                                 Behavior on opacity {
                                     enabled: Appearance.animationsEnabled
@@ -853,47 +1107,92 @@ Item {
                                             // sung, then the word settles back to its ink.
                                             readonly property bool lit: word.singing
                                                 && kin.pos >= word.modelData.t + word.modelData.d * letter.index / Math.max(1, letter.count)
-                                            color: letter.lit ? word.highlight : word.ink
+                                            // While scrambling, the real letter only holds its place in the row.
+                                            color: letter.scrambling ? "transparent" : letter.lit ? word.highlight : word.ink
                                             Behavior on color {
-                                                enabled: Appearance.animationsEnabled
+                                                enabled: Appearance.animationsEnabled && !letter.scrambling
                                                 ColorAnimation { duration: 140 }
                                             }
 
-                                            transformOrigin: Item.Bottom
                                             // Odd/even letters, and which half of the word a letter is in.
                                             readonly property real parity: letter.index % 2 === 0 ? -1 : 1
                                             readonly property real side: letter.index < letter.count / 2 ? -1 : 1
                                             readonly property real sy: word.motion.sy ?? 1
+                                            // "elastic" sets its own start width; "stretch" keeps volume.
+                                            readonly property real sx: word.motion.sx ?? (1 / letter.sy)
                                             readonly property string out: slot.exit
+                                            // A fixed direction per letter, for orbits and bursts.
+                                            readonly property real angle: (letter.nx + 0.5) * Math.PI * 2
 
-                                            // "dissolve" switches letters off one by one in a random order.
-                                            // Each letter has its own moment in the exit (0.2..1); at rest
-                                            // exitT is 0, so every letter is fully on.
-                                            readonly property real dissolve: letter.out === "dissolve"
+                                            // "dissolve" and "evaporate" switch letters off one by one in a
+                                            // random order. Each letter has its own moment in the exit
+                                            // (0.2..1); at rest exitT is 0, so every letter is fully on.
+                                            readonly property real dissolve: ["dissolve", "evaporate", "scrambleOut"].includes(letter.out)
                                                 ? Math.max(0, Math.min(1, (0.2 + (letter.nx + 0.5) * 0.8 - slot.exitT) * 6)) : 1
-                                            opacity: Math.max(0, Math.min(1, letter.p * 2.2)) * letter.dissolve
-                                            scale: word.motion.scale + (1 - word.motion.scale) * letter.p
-                                            rotation: (word.motion.rot * 2 * letter.nx) * letter.q
+                                            // "strobe" flickers the letter on and off while it lands.
+                                            readonly property real strobe: word.motion.strobe && letter.p < 1
+                                                ? (Math.floor(letter.p * 10) % 2 === 0 ? 0.12 : 1) : 1
+                                            // "scramble" flips through random characters before it settles,
+                                            // and "scrambleOut" does it in reverse on the way out.
+                                            readonly property bool scrambling: (word.motion.scramble && letter.p > 0 && letter.p < 0.98)
+                                                || (letter.out === "scrambleOut" && slot.exitT > 0.02)
+                                            opacity: Math.max(0, Math.min(1, letter.p * 2.2)) * letter.dissolve * letter.strobe
+                                            scale: (word.motion.scale + (1 - word.motion.scale) * letter.p)
+                                                * (letter.out === "explode" ? 1 + slot.exitT * 0.6
+                                                    : letter.out === "spinout" ? 1 - slot.exitT : 1)
+                                            // "pendulum" letters hang from their top edge.
+                                            transformOrigin: word.motion.hang ? Item.Top : Item.Bottom
+                                            rotation: (word.motion.rot * 2 * (word.motion.hang ? 1 : letter.nx)) * letter.q
                                                 + (letter.out === "shatter" ? slot.exitT * 160 * letter.nx
-                                                    : letter.out === "fall" ? slot.exitT * 70 * letter.nx : 0)
+                                                    : letter.out === "fall" ? slot.exitT * 70 * letter.nx
+                                                    : letter.out === "explode" ? slot.exitT * 220 * letter.nx
+                                                    : letter.out === "spinout" ? slot.exitT * 540 * letter.parity : 0)
+                                            // "jitter": a shake that dies away as the letter lands.
+                                            readonly property real shake: (word.motion.jitter ?? 0) * word.em * letter.q
                                             transform: [
                                                 Translate {
                                                     x: (word.motion.x + word.motion.spread * 2 * letter.nx
-                                                            + (word.motion.alt ?? 0) * letter.parity) * word.em * letter.q
+                                                            + (word.motion.alt ?? 0) * letter.parity
+                                                            + (word.motion.orbit ?? 0) * Math.cos(letter.angle + letter.q * 2.5)) * word.em * letter.q
+                                                        + letter.shake * Math.sin(letter.p * 47 + letter.nx * 9)
                                                         + (letter.out === "shatter" ? slot.exitT * 6 * letter.nx * word.em
                                                             : letter.out === "split" ? slot.exitT * 2.6 * letter.side * word.em
-                                                            : letter.out === "fall" ? slot.exitT * letter.nx * word.em : 0)
+                                                            : letter.out === "fall" ? slot.exitT * letter.nx * word.em
+                                                            : letter.out === "explode" ? slot.exitT * 4 * Math.cos(letter.angle) * word.em : 0)
                                                     y: (word.motion.y + word.motion.spread * 2 * letter.ny
-                                                            + (word.motion.altY ?? 0) * letter.parity) * word.em * letter.q
+                                                            + (word.motion.altY ?? 0) * letter.parity
+                                                            + (word.motion.orbit ?? 0) * Math.sin(letter.angle + letter.q * 2.5)) * word.em * letter.q
+                                                        + letter.shake * Math.sin(letter.p * 61 + letter.ny * 7) * 0.6
                                                         + (letter.out === "shatter" ? slot.exitT * 5 * letter.ny * word.em
-                                                            : letter.out === "fall" ? slot.exitT * (3 + 2 * letter.ny) * word.em : 0)
+                                                            : letter.out === "fall" ? slot.exitT * (3 + 2 * letter.ny) * word.em
+                                                            : letter.out === "melt" ? slot.exitT * (1.2 + 1.6 * (letter.ny + 0.5)) * word.em
+                                                            : letter.out === "explode" ? slot.exitT * 4 * Math.sin(letter.angle) * word.em
+                                                            : letter.out === "evaporate" ? -slot.exitT * (1.5 + 2 * (letter.ny + 0.5)) * word.em : 0)
                                                 },
-                                                // "stretch": tall and thin, springing out to shape.
+                                                // "stretch", "elastic" and "unfold": squeezed, springing out
+                                                // to shape; "melt" drips the letter out long and thin.
                                                 Scale {
                                                     origin.x: letter.width / 2
-                                                    origin.y: letter.height
-                                                    xScale: 1 + (1 / letter.sy - 1) * letter.q
-                                                    yScale: 1 + (letter.sy - 1) * letter.q
+                                                    origin.y: word.motion.unfold || letter.out === "melt" ? 0 : letter.height
+                                                    xScale: (1 + (letter.sx - 1) * letter.q)
+                                                        * (letter.out === "melt" ? 1 - slot.exitT * 0.35 : 1)
+                                                    yScale: (1 + (letter.sy - 1) * letter.q)
+                                                        * (letter.out === "melt" ? 1 + slot.exitT * 1.4 : 1)
+                                                },
+                                                // "lean": sheared over like a fast italic, snapping upright.
+                                                Matrix4x4 {
+                                                    readonly property real k: (word.motion.lean ?? 0) * letter.q
+                                                    matrix: Qt.matrix4x4(1, -k, 0, k * letter.height,
+                                                                         0, 1, 0, 0,
+                                                                         0, 0, 1, 0,
+                                                                         0, 0, 0, 1)
+                                                },
+                                                // "tumble": flipped over the horizontal axis, like a split-flap board.
+                                                Rotation {
+                                                    origin.x: letter.width / 2
+                                                    origin.y: letter.height / 2
+                                                    axis { x: 1; y: 0; z: 0 }
+                                                    angle: (word.motion.flipX ?? 0) * letter.q
                                                 },
                                                 // "flip": turned edge-on, rolling round to face front.
                                                 Rotation {
@@ -904,9 +1203,23 @@ Item {
                                                 }
                                             ]
 
+                                            Text {
+                                                anchors.centerIn: parent
+                                                visible: letter.scrambling
+                                                text: kin.scrambleGlyph(letter.nx * 31 + letter.index,
+                                                    Math.floor((letter.p + slot.exitT) * 16))
+                                                renderType: Text.QtRendering
+                                                font: letter.font
+                                                color: word.highlight
+                                            }
+
                                             SequentialAnimation {
                                                 id: letterIn
-                                                PauseAnimation { duration: letter.index * word.motion.stagger }
+                                                // "rain" lands its letters in a scattered order.
+                                                PauseAnimation {
+                                                    duration: letter.index * word.motion.stagger
+                                                        + (letter.nx + 0.5) * (word.motion.scatterDelay ?? 0)
+                                                }
                                                 NumberAnimation {
                                                     target: letter; property: "p"; to: 1
                                                     duration: word.motion.dur

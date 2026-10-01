@@ -13,7 +13,22 @@ Singleton {
             // Look of the lyric sheet; see components/lyricsProfiles.js. The lyrics
             // button cycles through them on a double-click.
             lyricsStyle: "reel",
-            lyricsCustomStyle: ({})
+            lyricsCustomStyle: ({}),
+            // Reel settings (see components/lyricsProfiles.js for the look ids):
+            // camera strength "off" | "subtle" | "normal" | "strong"
+            reelCamera: "normal",
+            // react to the music's beats (needs cava): "off" | "light" | "strong"
+            reelBeats: "light",
+            // each look's own transitions, or "mixed" to vary them every line
+            reelTransitions: "look",
+            // lines per look; 0 changes only at pauses between sections
+            reelLookChange: 4,
+            // look ids to leave out of the rotation, e.g. ["follow", "comic"]
+            reelDisabledLooks: []
+        },
+        // The standalone runs cava in mono, lowest bands first.
+        appearance: {
+            cava: { stereo: false }
         },
         background: {
             widgets: {

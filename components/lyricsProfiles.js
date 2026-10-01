@@ -14,6 +14,8 @@
 //          "poster"    Anton            — tall condensed poster capitals
 //          "gothic"    Pirata One       — blackletter
 //          "retro"     Monoton          — multi-line retro neon
+//          "comic"     Bangers          — comic-book capitals
+//          "marker"    Permanent Marker — felt-tip handwriting
 //
 // size     scale on the sheet's type size — display faces need their own
 // activeRestAlpha  opacity of the not-yet-sung words on the current line
@@ -206,9 +208,16 @@ profiles["motion"] = {
 //   punch     how hard this look's hits drive the camera (0..1)
 //   layout    "stack" or "stagger" (rows step left and right)
 //   enter     slam | cascade | scatter | type | focus | flip | stretch | split
-//             | wave | zoom | drop — how letters land
+//             | wave | zoom | drop | elastic | rain | tumble | orbit | jitter
+//             | pendulum | scramble | lean | strobe | unfold | conveyor | spring
+//             — how letters land
 //   exit      through | blur | glitch | shatter | whip | fall | split | dissolve
-//             | flip — the cut out
+//             | flip | explode | evaporate | squash | spinout | rewind | wipe
+//             | iris | melt | implode | drift | scrambleOut — the cut out
+//   cut       none | wipe | iris | push | zoomIn | tilt | drop — how the whole
+//             line arrives, on top of its letters landing
+//   id, label every look has a stable id (used by the settings to switch looks
+//             on and off) and a name for the settings page
 //   follow    follow-cam: the line is set bigger than the frame and the camera
 //             pans to each word as it is sung
 profiles["reel"] = {
@@ -220,79 +229,174 @@ profiles["reel"] = {
     looks: [
         // Hit: poster capitals slammed down letter by letter, the sung word
         // burning red, then the camera flies through the line.
-        { font: "heavy", uppercase: true, color: "#ffffff", highlight: "#ff3b47", size: 1.0, tint: "#b0101c",
-          glow: { color: "#ff2a3a", radius: 14 }, letters: true, enter: "slam", exit: "through", punch: 1.0,
+        { id: "hit", label: "Hit", font: "heavy", uppercase: true, color: "#ffffff", highlight: "#ff3b47", size: 1.0, tint: "#b0101c",
+          glow: { color: "#ff2a3a", radius: 14 }, letters: true, cut: "zoomIn", enter: "slam", exit: "through", punch: 1.0,
           accent: { font: "serif", uppercase: true, color: "#ff3b47", size: 1.4,
                     glow: { color: "#8a0010", radius: 18 }, enter: "slam" } },
         // Focus: serif pulled into focus with a gold sweep, sinking back out of it.
-        { font: "serif", uppercase: false, color: "#f3e3cc", highlight: "#ffd27a", size: 1.05, tint: "#8a6a4a",
+        { id: "focus", label: "Focus", font: "serif", uppercase: false, color: "#f3e3cc", highlight: "#ffd27a", size: 1.05, tint: "#8a6a4a",
           glow: null, letters: true, enter: "focus", exit: "blur", punch: 0.45,
           accent: { font: "script", uppercase: false, color: "#e7a0a0", size: 1.7, tilt: -6,
                     glow: null, enter: "focus" } },
         // Sign: script typed on like neon warming up, glitching off.
-        { font: "signature", uppercase: false, color: "#ffffff", highlight: "#9fe8ff", size: 1.25, tint: "#0b6fa8",
-          glow: { color: "#29b6ff", radius: 16 }, letters: true, enter: "type", exit: "glitch", punch: 0.6,
+        { id: "sign", label: "Sign", font: "signature", uppercase: false, color: "#ffffff", highlight: "#9fe8ff", size: 1.25, tint: "#0b6fa8",
+          glow: { color: "#29b6ff", radius: 16 }, letters: true, cut: "wipe", enter: "type", exit: "glitch", punch: 0.6,
           accent: { font: "heavy", uppercase: true, color: "#ffffff", size: 0.95,
                     glow: { color: "#29b6ff", radius: 18 }, enter: "slam" } },
         // Scatter: gold capitals assembling out of the air and blown apart.
-        { font: "heavy", uppercase: true, color: "#ffe14d", highlight: "#ffffff", size: 0.95, tint: "#a85a00",
+        { id: "scatter", label: "Scatter", font: "heavy", uppercase: true, color: "#ffe14d", highlight: "#ffffff", size: 0.95, tint: "#a85a00",
           glow: { color: "#ff9d00", radius: 12 }, outline: "#3a1c00", letters: true, enter: "scatter", exit: "shatter",
           punch: 0.8,
           accent: { font: "brush", uppercase: false, color: "#ffffff", size: 1.5, tilt: -5,
                     glow: { color: "#ff7a00", radius: 16 }, enter: "cascade" } },
         // Whip: violet brush script dropping onto a staggered layout, whipped off frame.
-        { font: "brush", uppercase: false, color: "#e3c2ff", highlight: "#ffffff", size: 1.15, tint: "#5b1f8f",
-          glow: { color: "#a855f7", radius: 16 }, letters: true, layout: "stagger", enter: "cascade", exit: "whip",
+        { id: "whip", label: "Whip", font: "brush", uppercase: false, color: "#e3c2ff", highlight: "#ffffff", size: 1.15, tint: "#5b1f8f",
+          glow: { color: "#a855f7", radius: 16 }, letters: true, cut: "push", layout: "stagger", enter: "cascade", exit: "whip",
           punch: 0.7,
           accent: { font: "heavy", uppercase: true, color: "#ffffff", size: 1.0,
                     glow: { color: "#a855f7", radius: 18 }, enter: "slam" } },
         // Poster: towering condensed capitals that squash and stretch into place,
         // then shred apart down the middle.
-        { font: "poster", uppercase: true, color: "#ffffff", highlight: "#ff2a6d", size: 1.15, tint: "#3a0018",
+        { id: "poster", label: "Poster", font: "poster", uppercase: true, color: "#ffffff", highlight: "#ff2a6d", size: 1.15, tint: "#3a0018",
           glow: { color: "#ff2a6d", radius: 10 }, letters: true, enter: "stretch", exit: "split", punch: 0.9,
           accent: { font: "script", uppercase: false, color: "#ff8fb1", size: 1.6, tilt: -7,
                     glow: { color: "#ff2a6d", radius: 16 }, enter: "cascade" } },
         // Gothic: blackletter flipping round like cards, dropped to the floor on the way out.
-        { font: "gothic", uppercase: false, color: "#f4e9e9", highlight: "#ff2424", size: 1.2, tint: "#420000",
-          glow: { color: "#ff0000", radius: 14 }, letters: true, enter: "flip", exit: "fall", punch: 0.85,
+        { id: "gothic", label: "Gothic", font: "gothic", uppercase: false, color: "#f4e9e9", highlight: "#ff2424", size: 1.2, tint: "#420000",
+          glow: { color: "#ff0000", radius: 14 }, letters: true, cut: "tilt", enter: "flip", exit: "fall", punch: 0.85,
           accent: { font: "heavy", uppercase: true, color: "#ffffff", size: 0.9,
                     glow: { color: "#ff1a1a", radius: 18 }, enter: "slam" } },
         // Retro: multi-line neon rushing in from far away, fizzing out letter by letter.
-        { font: "retro", uppercase: true, color: "#ff7ad9", highlight: "#ffffff", size: 0.85, tint: "#5c0a52",
-          glow: { color: "#ff3cc7", radius: 16 }, letters: true, enter: "zoom", exit: "dissolve", punch: 0.55,
+        { id: "retro", label: "Retro", font: "retro", uppercase: true, color: "#ff7ad9", highlight: "#ffffff", size: 0.85, tint: "#5c0a52",
+          glow: { color: "#ff3cc7", radius: 16 }, letters: true, cut: "iris", enter: "zoom", exit: "dissolve", punch: 0.55,
           accent: { font: "signature", uppercase: false, color: "#7af3ff", size: 1.7, tilt: -6,
                     glow: { color: "#00d5ff", radius: 16 }, enter: "wave" } },
         // Wave: aqua script rolling in on a swell, flipped away.
-        { font: "signature", uppercase: false, color: "#c4fff4", highlight: "#ffffff", size: 1.3, tint: "#06574a",
+        { id: "wave", label: "Wave", font: "signature", uppercase: false, color: "#c4fff4", highlight: "#ffffff", size: 1.3, tint: "#06574a",
           glow: { color: "#2ef2c8", radius: 16 }, letters: true, enter: "wave", exit: "flip", punch: 0.5,
           accent: { font: "poster", uppercase: true, color: "#ffffff", size: 1.0,
                     glow: { color: "#2ef2c8", radius: 14 }, enter: "stretch" } },
         // Split: outlined condensed yellow closing in from both sides, flown through.
-        { font: "poster", uppercase: true, color: "#ffe14d", highlight: "#ffffff", size: 1.1, tint: "#5a4000",
+        { id: "split", label: "Split", font: "poster", uppercase: true, color: "#ffe14d", highlight: "#ffffff", size: 1.1, tint: "#5a4000",
           glow: null, outline: "#000000", letters: true, layout: "stagger", enter: "split", exit: "through",
           punch: 0.95,
           accent: { font: "gothic", uppercase: false, color: "#ffffff", size: 1.5,
                     glow: { color: "#ffb000", radius: 14 }, enter: "drop" } },
         // Ice: cold serif capitals bouncing down from above and falling away.
-        { font: "serif", uppercase: true, color: "#e2f6ff", highlight: "#79d4ff", size: 1.0, tint: "#0b3566",
-          glow: { color: "#79d4ff", radius: 12 }, letters: true, enter: "drop", exit: "fall", punch: 0.6,
+        { id: "ice", label: "Ice", font: "serif", uppercase: true, color: "#e2f6ff", highlight: "#79d4ff", size: 1.0, tint: "#0b3566",
+          glow: { color: "#79d4ff", radius: 12 }, letters: true, cut: "drop", enter: "drop", exit: "fall", punch: 0.6,
           accent: { font: "script", uppercase: false, color: "#ffffff", size: 1.7, tilt: -5,
                     glow: { color: "#79d4ff", radius: 16 }, enter: "focus" } },
         // Follow: a follow-cam. The line is set bigger than the frame and the
         // camera pans to each word as it lands, like a lyric video tracking
         // the text word by word.
-        { font: "poster", uppercase: true, color: "#ffffff", highlight: "#5ef0ff", size: 1.5, tint: "#0d3a3a",
+        { id: "follow", label: "Follow", font: "poster", uppercase: true, color: "#ffffff", highlight: "#5ef0ff", size: 1.5, tint: "#0d3a3a",
           glow: { color: "#5ef0ff", radius: 10 }, letters: true, follow: true, enter: "slam", exit: "through",
           punch: 0.5,
           accent: { font: "brush", uppercase: false, color: "#5ef0ff", size: 1.3, tilt: -5,
                     glow: { color: "#00c8ff", radius: 14 }, enter: "cascade" } },
         // Follow (serif): the same camera move, slower and quieter, each word
         // pulled into focus as the camera arrives on it.
-        { font: "serif", uppercase: false, color: "#fff4e3", highlight: "#ffcf8a", size: 1.5, tint: "#5a3a1a",
+        { id: "followSerif", label: "Follow serif", font: "serif", uppercase: false, color: "#fff4e3", highlight: "#ffcf8a", size: 1.5, tint: "#5a3a1a",
           glow: { color: "#ffb35c", radius: 10 }, letters: true, follow: true, enter: "focus", exit: "blur",
           punch: 0.3,
           accent: { font: "script", uppercase: false, color: "#ffcf8a", size: 1.5, tilt: -6,
-                    glow: { color: "#ff9d3c", radius: 14 }, enter: "focus" } }
+                    glow: { color: "#ff9d3c", radius: 14 }, enter: "focus" } },
+        // Comic: halftone-loud capitals that snap out of nothing on an elastic
+        // pop, then burst apart. For punchy, shouted lines.
+        { id: "comic", label: "Comic", font: "comic", uppercase: true, color: "#ffd23f", highlight: "#ffffff",
+          size: 1.2, tint: "#7a5a00", glow: null, outline: "#141414", letters: true, enter: "elastic",
+          exit: "explode", punch: 1.0,
+          accent: { font: "comic", uppercase: true, color: "#ff4b3e", size: 1.35, tilt: -6, glow: null,
+                    enter: "elastic" } },
+        // Marker: hand-written letters landing in a scattered order like quick
+        // strokes, then lifting away like ink drying off the page.
+        { id: "marker", label: "Marker", font: "marker", uppercase: false, color: "#f4f4f2", highlight: "#4d8dff",
+          size: 1.1, tint: "#1d3a6b", glow: { color: "#4d8dff", radius: 8 }, letters: true, enter: "rain",
+          exit: "evaporate", punch: 0.5,
+          accent: { font: "marker", uppercase: true, color: "#4d8dff", size: 1.4, tilt: -4,
+                    glow: { color: "#4d8dff", radius: 12 }, enter: "pendulum" } },
+        // Tumble: condensed capitals flipping over like a split-flap board,
+        // crushed flat when the line ends.
+        { id: "tumble", label: "Tumble", font: "poster", uppercase: true, color: "#f6f3ee", highlight: "#e8445a",
+          size: 1.2, tint: "#5a1020", glow: { color: "#e8445a", radius: 8 }, letters: true, enter: "tumble",
+          exit: "squash", punch: 0.8,
+          accent: { font: "poster", uppercase: true, color: "#e8445a", size: 1.3,
+                    glow: { color: "#e8445a", radius: 14 }, enter: "slam" } },
+        // Orbit: heavy letters circling in to their places, spun away at the
+        // end. Suits long, held notes.
+        { id: "orbit", label: "Orbit", font: "heavy", uppercase: true, color: "#effff7", highlight: "#2ee59d",
+          size: 0.95, tint: "#0b5a3c", glow: { color: "#2ee59d", radius: 10 }, letters: true, enter: "orbit",
+          exit: "spinout", punch: 0.55,
+          accent: { font: "signature", uppercase: false, color: "#2ee59d", size: 1.6, tilt: -5,
+                    glow: { color: "#18b97a", radius: 14 }, enter: "focus" } },
+        // Static: letters shaking into place on a bad signal, cut off by a glitch.
+        { id: "static", label: "Static", font: "poster", uppercase: true, color: "#f2f2f2", highlight: "#ff3b30",
+          size: 1.15, tint: "#3a0a08", glow: { color: "#ff3b30", radius: 8 }, letters: true, enter: "jitter",
+          exit: "glitch", punch: 0.9,
+          accent: { font: "marker", uppercase: false, color: "#ff3b30", size: 1.4, tilt: -6,
+                    glow: { color: "#ff3b30", radius: 12 }, enter: "jitter" } },
+        // Swing: brush letters hanging from their tops and swinging into place,
+        // dropped on the way out.
+        { id: "swing", label: "Swing", font: "brush", uppercase: false, color: "#fff3e8", highlight: "#ff7a1a",
+          size: 1.2, tint: "#6a2e00", glow: { color: "#ff7a1a", radius: 10 }, letters: true, enter: "pendulum",
+          exit: "fall", punch: 0.6,
+          accent: { font: "poster", uppercase: true, color: "#ff7a1a", size: 1.0,
+                    glow: { color: "#ff7a1a", radius: 14 }, enter: "tumble" } },
+        // Rewind: monochrome capitals typed on, then wound back off the right edge.
+        { id: "rewind", label: "Rewind", font: "heavy", uppercase: true, color: "#f2f2f2", highlight: "#2f6bff",
+          size: 1.0, tint: "#0d1f4a", glow: { color: "#2f6bff", radius: 8 }, letters: true, enter: "type",
+          exit: "rewind", punch: 0.7,
+          accent: { font: "comic", uppercase: true, color: "#2f6bff", size: 1.4,
+                    glow: { color: "#2f6bff", radius: 12 }, enter: "elastic" } },
+        // Follow (comic): the follow-cam with comic capitals popping in word by word.
+        { id: "followComic", label: "Follow comic", font: "comic", uppercase: true, color: "#ffd23f",
+          highlight: "#ffffff", size: 1.6, tint: "#7a5a00", glow: null, outline: "#141414", letters: true,
+          follow: true, enter: "elastic", exit: "explode", punch: 0.6,
+          accent: { font: "comic", uppercase: true, color: "#ff4b3e", size: 1.25, tilt: -5, glow: null,
+                    enter: "elastic" } },
+        // Decode: capitals resolving out of scrambled characters, wiped in and
+        // scrambled away again.
+        { id: "decode", label: "Decode", font: "heavy", uppercase: true, color: "#eef2ee", highlight: "#ffb020",
+          size: 0.95, tint: "#4a3000", glow: { color: "#ffb020", radius: 8 }, letters: true, enter: "scramble",
+          exit: "scrambleOut", cut: "wipe", punch: 0.5,
+          accent: { font: "poster", uppercase: true, color: "#ffb020", size: 1.35,
+                    glow: { color: "#ffb020", radius: 12 }, enter: "scramble" } },
+        // Lean: condensed capitals sheared over by speed and snapping upright,
+        // pushed in from the right and drifting off.
+        { id: "lean", label: "Lean", font: "poster", uppercase: true, color: "#f5f5f5", highlight: "#ff2d55",
+          size: 1.2, tint: "#4a0014", glow: { color: "#ff2d55", radius: 8 }, letters: true, enter: "lean",
+          exit: "drift", cut: "push", punch: 0.8,
+          accent: { font: "brush", uppercase: false, color: "#ff2d55", size: 1.5, tilt: -6,
+                    glow: { color: "#ff2d55", radius: 12 }, enter: "lean" } },
+        // Strobe: heavy capitals flickering on under a strobe, opened and closed
+        // through an iris.
+        { id: "strobe", label: "Strobe", font: "heavy", uppercase: true, color: "#ffffff", highlight: "#c6ff3d",
+          size: 1.0, tint: "#2c3a00", glow: { color: "#c6ff3d", radius: 10 }, letters: true, enter: "strobe",
+          exit: "iris", cut: "iris", punch: 1.0,
+          accent: { font: "comic", uppercase: true, color: "#c6ff3d", size: 1.4,
+                    glow: { color: "#c6ff3d", radius: 14 }, enter: "strobe" } },
+        // Banner: blackletter unrolling from the top like a hung banner, then
+        // melting away.
+        { id: "banner", label: "Banner", font: "gothic", uppercase: false, color: "#f3e7d3", highlight: "#e0a526",
+          size: 1.25, tint: "#4a3100", glow: { color: "#e0a526", radius: 10 }, letters: true, enter: "unfold",
+          exit: "melt", cut: "zoomIn", punch: 0.6,
+          accent: { font: "heavy", uppercase: true, color: "#e0a526", size: 0.9,
+                    glow: { color: "#e0a526", radius: 14 }, enter: "slam" } },
+        // Conveyor: letters sliding in one after another on a belt, the line
+        // tipped up into view and collapsing to a point at the end.
+        { id: "conveyor", label: "Conveyor", font: "poster", uppercase: true, color: "#f2f2f2", highlight: "#ff6a00",
+          size: 1.15, tint: "#4a1f00", glow: { color: "#ff6a00", radius: 8 }, letters: true, enter: "conveyor",
+          exit: "implode", cut: "tilt", punch: 0.7,
+          accent: { font: "marker", uppercase: false, color: "#ff6a00", size: 1.4, tilt: -5,
+                    glow: { color: "#ff6a00", radius: 12 }, enter: "spring" } },
+        // Spring: comic capitals springing up from below, the line dropped in
+        // and wiped away.
+        { id: "spring", label: "Spring", font: "comic", uppercase: true, color: "#ffffff", highlight: "#ff4fa3",
+          size: 1.2, tint: "#5a0a34", glow: null, outline: "#1a1a1a", letters: true, enter: "spring",
+          exit: "wipe", cut: "drop", punch: 0.9,
+          accent: { font: "comic", uppercase: true, color: "#ff4fa3", size: 1.35, tilt: -5, glow: null,
+                    enter: "elastic" } }
     ],
     // The fields below keep the shared helpers happy; the edit view draws its own.
     line: { font: "heavy", weight: 400, uppercase: true, spacing: 0 },
@@ -320,7 +424,31 @@ var letterMotion = {
     // Rushing in from far away, out of focus.
     zoom:    { scale: 0.05, x: 0, y: 0, rot: 0, spread: 0, dur: 520, stagger: 26, ease: "OutExpo", blur: true },
     // Dropped from above with a bounce.
-    drop:    { scale: 1.0, x: 0, y: -1.6, rot: 0, spread: 0, dur: 620, stagger: 38, ease: "OutBounce" }
+    drop:    { scale: 1.0, x: 0, y: -1.6, rot: 0, spread: 0, dur: 620, stagger: 38, ease: "OutBounce" },
+    // Snapping out of a sliver to full width on an elastic overshoot.
+    elastic: { scale: 1.0, x: 0, y: 0, rot: 0, spread: 0, sx: 0.05, dur: 700, stagger: 22, ease: "OutElastic" },
+    // Dropping in from above in a scattered order rather than left to right.
+    rain:    { scale: 1.0, x: 0, y: -1.2, rot: 8, spread: 0, scatterDelay: 320, dur: 420, stagger: 12, ease: "OutCubic" },
+    // Flipping over round the horizontal axis, like a split-flap board.
+    tumble:  { scale: 1.0, x: 0, y: 0, rot: 0, spread: 0, flipX: -100, dur: 460, stagger: 32, ease: "OutBack" },
+    // Circling in to the letter's place from a ring around it.
+    orbit:   { scale: 0.6, x: 0, y: 0, rot: 120, spread: 0, orbit: 1.6, dur: 640, stagger: 24, ease: "OutCubic" },
+    // Shaking in on a bad signal and settling.
+    jitter:  { scale: 1.0, x: 0, y: 0, rot: 0, spread: 0, jitter: 0.45, dur: 380, stagger: 18, ease: "OutQuad" },
+    // Hanging from the top edge and swinging down into place.
+    pendulum: { scale: 1.0, x: 0, y: 0, rot: -75, spread: 0, hang: true, dur: 760, stagger: 40, ease: "OutElastic" },
+    // Decoding out of random characters, like a cipher resolving.
+    scramble: { scale: 1.0, x: 0, y: 0, rot: 0, spread: 0, scramble: true, dur: 640, stagger: 34, ease: "Linear" },
+    // Coming in sheared over and snapping upright.
+    lean:    { scale: 1.0, x: -1.1, y: 0, rot: 0, spread: 0, lean: 0.9, dur: 420, stagger: 22, ease: "OutCubic" },
+    // Flickering on like a strobe catching it.
+    strobe:  { scale: 1.0, x: 0, y: 0, rot: 0, spread: 0, strobe: true, dur: 420, stagger: 30, ease: "Linear" },
+    // Unrolling down from the top edge like a banner.
+    unfold:  { scale: 1.0, x: 0, y: 0, rot: 0, spread: 0, sy: 0.02, sx: 1, unfold: true, dur: 440, stagger: 28, ease: "OutBack" },
+    // Sliding in from the left one after another, as on a belt.
+    conveyor: { scale: 1.0, x: -2.6, y: 0, rot: 0, spread: 0, dur: 480, stagger: 34, ease: "OutCubic" },
+    // Springing up from below and wobbling to a stop.
+    spring:  { scale: 1.0, x: 0, y: 1.3, rot: 0, spread: 0, dur: 760, stagger: 30, ease: "OutElastic" }
 };
 
 // Order the switcher shows them in.

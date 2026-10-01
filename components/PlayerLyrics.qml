@@ -40,6 +40,8 @@ Item {
     FontLoader { id: fontPoster; source: root._fontDir + "Anton-Regular.ttf" }
     FontLoader { id: fontGothic; source: root._fontDir + "PirataOne-Regular.ttf" }
     FontLoader { id: fontRetro; source: root._fontDir + "Monoton-Regular.ttf" }
+    FontLoader { id: fontComic; source: root._fontDir + "Bangers-Regular.ttf" }
+    FontLoader { id: fontMarker; source: root._fontDir + "PermanentMarker-Regular.ttf" }
 
     function styleFont(key: string): string {
         const loader = key === "heavy" ? fontHeavy
@@ -50,6 +52,8 @@ Item {
             : key === "poster" ? fontPoster
             : key === "gothic" ? fontGothic
             : key === "retro" ? fontRetro
+            : key === "comic" ? fontComic
+            : key === "marker" ? fontMarker
             : null;
         return (loader && loader.status === FontLoader.Ready) ? loader.name : Appearance.font.family.main;
     }
