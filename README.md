@@ -1,71 +1,71 @@
 # Quickshell Music Player
 
-A modern, animated MPRIS media player widget for Quickshell featuring real-time synchronized lyrics with nine lyric themes (including Reel, a kinetic lyric-video mode), album art morphing transitions, spring-physics micro-animations, adaptive Material 3 color harmonizing, and interactive progress scrub seeking.
+An animated MPRIS music player for Quickshell with synced lyrics, nine lyric themes and Reel, a lyric-video mode where every line is typeset and animated like a music edit.
 
-![Preview](assets/preview.png)
+[![Reel lyrics playing in the player](assets/preview.webp)](assets/preview.mp4)
 
-## Features
+*Reel lyrics on a live track. Click for the full-quality video.*
 
-- Synchronized Scrolling Lyrics: Real-time synchronized lyrics with 60 FPS interpolation, interactive click-to-seek, and smooth auto-scrolling.
-- Word-Timed Lyrics from Three Sources: Lyrics are requested from AMLL (word-by-word timing, matched by Spotify track ID), LRCLIB and NetEase at once, and the best available answer wins. When LRCLIB holds several uploads of a song with different timings, the one most uploads agree on is used, so a single mistimed upload can't put the lyrics out of sync.
-- Lyric Themes: Theme, Cinematic, Neon, Editorial, Nocturne, Neon script, Edit, Motion and Reel, each with its own typefaces, colours, glow and stage effects. Double-click the lyrics button to move to the next theme; a single click opens and closes the lyrics.
-- Reel (Kinetic Lyric Video): Lyrics play like a lyric edit. Twenty-seven looks, each with its own typeface, colour and motion: letters land on the vocal (slam, cascade, scatter, typed-on, focus pull, card flip, squash-and-stretch, scramble-decode, strobe, orbit, pendulum swing and more), a highlight sweeps through each word at the speed it is sung, whole lines cut in (wipe, iris, push, zoom, tilt, drop) and leave on a cut (fly-through, blur, glitch, shatter, whip pan, melt, implode, dissolve and more). The stage moves like a camera, with a slow push-in and a punch on every hit, and follow-cam looks pan from word to word. Looks rotate in a shuffled order per song.
-- Beat Reaction: With `cava` installed, Reel listens to the music too. Each kick drum punches the camera, bounces the word being sung and pulses the glow behind the line.
-- Player Volume: The volume control adjusts the player's own audio stream through PipeWire, not the whole system.
-- Morphing Album Art: Fluid animated transitions between compact media bar and expanded lyrics sheet without image flicker.
-- Adaptive Theming: Extracts the dominant palette from the currently playing album art to dynamically tint the card background, borders, and accent controls.
-- Tactile Micro-Animations: Spring scale curves (Easing.OutBack) on playback buttons, lyric lines, and toggle triggers.
-- Interactive Progress Bar: Accurate track progress interpolation, click-to-seek support with D-Bus grace windows, and instant reset on track replay.
-- Browser & Video Suppression: Automatically detects browser and video media streams to prevent unwarranted lyric fetching.
-- Multiple Player Presets:
-  - ExpandingLyricsPlayer: Flagship morphing card with lyrics panel toggle.
-  - CompactPlayer: Minimal horizontal bar with track info and basic controls.
-  - ClassicPlayer: Full-featured traditional layout with volume and timeline.
-  - MinimalPlayer: Lightweight low-profile widget for compact desktop setups.
-  - VisualizerPlayer: Waveform and audio visualizer embedded into the player card.
-  - AlbumArtPlayer: Large artwork focus with overlaid track details.
-  - LyricsPlayer / LyricsSplitPlayer: Dedicated dual-column and standalone lyrics viewers.
-  - FullPlayer: Comprehensive media dashboard with expanded metrics.
-- Universal MPRIS Support: Works out of the box with Spotify, MPV, Firefox, Chrome, Brave, Amberol, Cider, and any MPRIS2-compliant player.
+## What it does
+
+**Lyrics that keep time.** Lyrics are fetched from three sources at once: AMLL (word-by-word timing, matched by Spotify track ID), LRCLIB and NetEase. The best answer wins. When LRCLIB holds several uploads of a song with different timings, the timing most of them agree on is used, so one mistimed upload can't put the lyrics out of sync. Click any line to seek to it.
+
+**Nine lyric themes.** Theme, Cinematic, Neon, Editorial, Nocturne, Neon script, Edit, Motion and Reel, each with its own typefaces, colours, glow and stage effects. Double-click the lyrics button to move to the next theme; a single click opens and closes the lyrics.
+
+**Reel.** Lyrics play like a lyric edit, in 27 looks that rotate through each song in a shuffled order:
+
+- Letters land on the vocal: slammed down, cascading, scattered in, typed on, pulled into focus, flipped like cards, decoded from scrambled characters, strobing on, orbiting in, swinging down from their tops and more.
+- A highlight sweeps through each word at the speed it is sung.
+- Whole lines cut in (wipe, iris, push, zoom, tilt, drop) and leave on a cut (fly-through, blur, glitch, shatter, whip pan, melt, implode, dissolve and more).
+- The stage moves like a camera: a slow push-in across each line and a punch on every hit. Follow-cam looks set the line wider than the frame and pan from word to word.
+- With `cava` installed, Reel reacts to the beat: each kick punches the camera, bounces the word being sung and pulses the glow behind the line.
+
+**A player that adapts.** The card takes its colours from the album art, morphs smoothly between the compact bar and the lyrics sheet, and its volume control adjusts the player's own audio stream rather than the whole system.
+
+**Any MPRIS player.** Spotify, MPV, Firefox, Chrome, Brave, Amberol, Cider and anything else that speaks MPRIS2. Browser and video streams are recognised, so the player doesn't go looking for lyrics to a YouTube tutorial.
+
+## Player layouts
+
+| Preset | Layout |
+|---|---|
+| `ExpandingLyricsPlayer` | Compact card that expands into the lyrics sheet (the one in the video) |
+| `CompactPlayer` | Horizontal bar with track info and controls |
+| `MinimalPlayer` | Low-profile widget for tight setups |
+| `ClassicPlayer` | Traditional layout with volume and timeline |
+| `VisualizerPlayer` | Audio visualizer built into the card |
+| `AlbumArtPlayer` | Large artwork with track details over it |
+| `LyricsPlayer` | Card given over to the lyrics |
+| `LyricsSplitPlayer` | Artwork and controls beside the lyrics |
+| `FullPlayer` | Everything at once |
 
 ## Requirements
 
-- Quickshell (0.3.0 or later)
-- Qt 6 (qt6-declarative, qt6-5compat, qt6-svg)
-- playerctl (for MPRIS media control and position tracking)
-- Python 3 (standard library only; used by lyrics fetcher)
-- cava (optional, for Reel's beat reaction)
-- Material Symbols or Nerd Font (for media icons)
+- Quickshell 0.3.0 or later
+- Qt 6 (`qt6-declarative`, `qt6-5compat`, `qt6-svg`)
+- `playerctl`
+- Python 3 (standard library only, for the lyrics fetcher)
+- Material Symbols font, for the icons
+- `cava` (optional, for Reel's beat reaction)
 
-The lyric themes bundle their display fonts in `assets/fonts/lyrics/` (all under the SIL Open Font License; licence files sit next to the fonts).
+The display fonts the lyric themes use are bundled in `assets/fonts/lyrics/`, each with its licence file (SIL Open Font License, or Apache 2.0 for Permanent Marker).
 
-## Installation
-
-Clone the repository:
+## Install and run
 
 ```bash
-git clone https://github.com/ZonicExists/quickshell-music-player.git
+git clone https://github.com/zonicisalive/quickshell-music-player.git
 cd quickshell-music-player
+qs -p .
 ```
 
-## Usage
+The player opens in the top-right corner of the screen and follows whichever player is active.
 
-### Standalone Window
+### Using it in your own Quickshell config
 
-You can launch the widget directly with Quickshell:
-
-```bash
-quickshell -p shell.qml
-```
-
-### Integration into an Existing Quickshell Configuration
-
-Copy the module directories (`components/`, `presets/`, `services/`, `scripts/`, `common/`) into your Quickshell configuration:
+Copy `components/`, `presets/`, `services/`, `scripts/`, `common/` and `assets/` into your config, then:
 
 ```qml
 import QtQuick
 import Quickshell
-import Quickshell.Services.Mpris
 import "presets"
 import "services"
 
@@ -81,80 +81,47 @@ Item {
 }
 ```
 
-## Directory Structure
+## Configuration
+
+Settings live in `common/Config.qml`, under `media`:
+
+| Option | Values | What it changes |
+|---|---|---|
+| `lyricsStyle` | `"reel"`, `"default"`, `"cinematic"`, `"neon"`, `"editorial"`, `"nocturne"`, `"neonScript"`, `"kinetic"`, `"motion"` | Lyric theme at start (the lyrics button cycles them) |
+| `reelCamera` | `"off"`, `"subtle"`, `"normal"`, `"strong"` | How much the Reel camera pushes and punches |
+| `reelBeats` | `"off"`, `"light"`, `"strong"` | How hard Reel reacts to the beat |
+| `reelTransitions` | `"look"`, `"mixed"` | Each look's own transitions, or a different entrance and exit every line |
+| `reelLookChange` | a number of lines, or `0` | How long a look lasts; `0` changes it only at pauses between sections |
+| `reelDisabledLooks` | list of look ids | Looks left out of the rotation, for example `["follow", "comic"]` |
+
+Look ids, and everything else a look is made of, are in `components/lyricsProfiles.js`. The file documents every field, so a new theme or Reel look only needs an entry there.
+
+Colours, rounding, type sizes and animation speed are set in `common/Appearance.qml`:
+
+- `fontSizeScale` scales all text.
+- `animationsEnabled` turns every transition off.
+- `colors` is the fallback palette for when there's no album art to take colours from.
+
+## Project layout
 
 ```
 quickshell-music-player/
-├── assets/
-│   ├── preview.png               # Widget preview screenshot
-│   └── fonts/lyrics/             # Display fonts used by the lyric themes
+├── shell.qml                  Standalone launcher
+├── presets/                   The nine player layouts
 ├── components/
-│   ├── PlayerArtwork.qml         # Album cover container with fallback
-│   ├── PlayerBase.qml            # Core player state, art resolution, and seek logic
-│   ├── PlayerControls.qml        # Play/pause, next, prev, and lyric buttons
-│   ├── PlayerInfo.qml            # Title, artist, and album typography
-│   ├── PlayerLyrics.qml          # Synced lyrics renderer and scroll engine
-│   ├── KineticLyrics.qml         # Reel / Edit / Motion kinetic lyric view
-│   ├── lyricsProfiles.js         # Lyric themes and Reel looks
-│   ├── PlayerProgress.qml        # Interactive timeline slider
-│   └── qmldir
-├── presets/
-│   ├── ExpandingLyricsPlayer.qml # Morphing lyrics player
-│   ├── CompactPlayer.qml         # Compact bar
-│   ├── MinimalPlayer.qml         # Minimal layout
-│   ├── ClassicPlayer.qml         # Classic media box
-│   ├── VisualizerPlayer.qml      # Visualizer integration
-│   ├── AlbumArtPlayer.qml        # Artwork focused
-│   ├── LyricsPlayer.qml          # Full lyrics card
-│   ├── LyricsSplitPlayer.qml     # Side-by-side lyrics layout
-│   ├── FullPlayer.qml            # Full media dashboard
-│   └── qmldir
+│   ├── PlayerBase.qml         Player state, artwork and seeking
+│   ├── PlayerLyrics.qml       Synced lyric sheet and the lyric themes
+│   ├── KineticLyrics.qml      Reel, Edit and Motion lyric views
+│   ├── lyricsProfiles.js      Lyric themes and Reel looks
+│   └── ...                    Artwork, info, controls, progress
 ├── services/
-│   ├── LyricsService.qml         # High-precision lyrics synchronizer
-│   ├── MprisController.qml       # Active player manager and tracker
-│   ├── YtMusic.qml               # Optional player bridge
-│   └── qmldir
-├── scripts/
-│   └── lyrics/
-│       └── lyrics.py             # AMLL, LRCLIB and NetEase lyrics fetcher
-├── common/
-│   ├── Appearance.qml            # Design tokens, motion curves, and palette
-│   ├── ColorUtils.qml            # Color manipulation utilities
-│   ├── Config.qml                # Options and fallback settings
-│   ├── MaterialSymbol.qml        # Icon rendering component
-│   ├── RippleButton.qml          # Tactile animated button
-│   ├── StyledSlider.qml          # Custom slider control
-│   ├── StyledText.qml            # Text renderer with formatting
-│   ├── StyledImage.qml           # Cached image loader
-│   ├── StyledRectangularShadow.qml # Drop shadow effect
-│   ├── AdaptedMaterialScheme.qml # Dynamic color scheme adapter
-│   ├── MediaArtworkResolver.qml  # Cover art cache and resolver
-│   ├── CavaProcess.qml           # Audio spectrum from cava, for beat reaction
-│   └── qmldir
-├── shell.qml                     # Standalone launcher
-├── LICENSE                       # MIT License
-└── README.md
+│   ├── LyricsService.qml      Lyrics lookup and timing
+│   └── MprisController.qml    Active player and stream volume
+├── scripts/lyrics/lyrics.py   AMLL, LRCLIB and NetEase fetcher
+├── common/                    Theme tokens, shared widgets, settings, cava
+└── assets/                    Preview video and lyric fonts
 ```
-
-## Configuration
-
-The player appearance and animation metrics can be adjusted in `common/Appearance.qml`:
-
-- `fontSizeScale`: Global typography scaling factor.
-- `animationsEnabled`: Toggle all UI transitions and micro-animations.
-- `rounding`: Corner radius scales for card frames and album covers.
-- `colors`: Base fallback palette when album art color extraction is unavailable.
-
-The default lyric theme is set in `common/Config.qml` (`media.lyricsStyle`, for example `"reel"` or `"default"`). Reel's options sit next to it:
-
-- `reelCamera`: `"off"`, `"subtle"`, `"normal"` or `"strong"` camera movement.
-- `reelBeats`: `"off"`, `"light"` or `"strong"` reaction to the beat (needs `cava`).
-- `reelTransitions`: `"look"` for each look's own transitions, or `"mixed"` to vary them every line.
-- `reelLookChange`: how many lines a look lasts; `0` changes it only at pauses between sections.
-- `reelDisabledLooks`: look ids to leave out of the rotation, for example `["follow", "comic"]`.
-
-New themes and Reel looks are added in `components/lyricsProfiles.js`; the file documents every field.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT. See [LICENSE](LICENSE). Bundled fonts keep their own licences, next to each font in `assets/fonts/lyrics/`.
