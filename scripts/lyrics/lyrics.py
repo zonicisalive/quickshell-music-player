@@ -33,7 +33,7 @@ TIMEOUT = 6
 # How long a better provider may keep a finished fallback's answer waiting.
 FALLBACK_GRACE = 2.5
 REQUEST_DELAY = 0.25
-USER_AGENT = "iNiR/2.28.0 (https://github.com/snowarch/inir)"
+USER_AGENT = "QS-Music-Player/1.1 (https://github.com/zonicisalive/quickshell-music-player/)"
 
 STAMP = re.compile(r"\[(\d{1,3}):(\d{2}(?:[.:]\d{1,3})?)\]")
 # TTML clock values: 12.5s, 01:02.345 or 01:02:03.456
